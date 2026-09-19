@@ -18,6 +18,8 @@
 
 ## 快速开始
 
+> 不想装 Node？直接在 [Releases](https://github.com/Sayb1e/myblog/releases) 下载免安装的 Windows 版 `MyBlog x.y.z.exe`，双击即用。
+
 要求 Node.js **22+**（`>=20.19` 也可）与 npm。
 
 ```bash
