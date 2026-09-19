@@ -1,0 +1,28 @@
+{
+  "name": "@myblog/server",
+  "version": "0.1.10",
+  "description": "Local web server and API for MyBlog.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --dts --watch"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@myblog/agent": "*",
+    "@myblog/core": "*",
+    "hono": "^4.13.8"
+  }
+}

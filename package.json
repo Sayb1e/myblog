@@ -1,0 +1,31 @@
+{
+  "name": "myblog",
+  "version": "0.1.10",
+  "private": true,
+  "description": "A local web app + CLI that manages a markdown-based learning workspace.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @myblog/core && npm run build --workspace @myblog/agent && npm run build --workspace @myblog/server && npm run build --workspace @myblog/cli && npm run build --workspace @myblog/web",
+    "typecheck": "tsc -b packages/core packages/agent packages/server packages/cli && tsc --noEmit -p packages/web/tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p packages/core/tsconfig.test.json && tsc --noEmit -p packages/agent/tsconfig.test.json && tsc --noEmit -p packages/cli/tsconfig.test.json && tsc --noEmit -p packages/web/tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "version:bump": "node scripts/version.mjs",
+    "desktop": "npm run start --workspace @myblog/desktop",
+    "app": "npm run build && npm run start --workspace @myblog/desktop",
+    "mlog": "node packages/cli/dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

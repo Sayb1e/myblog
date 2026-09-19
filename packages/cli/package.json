@@ -1,0 +1,26 @@
+{
+  "name": "@myblog/cli",
+  "version": "0.1.10",
+  "description": "Command line interface for MyBlog.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "myblog": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --clean",
+    "dev": "tsup src/index.ts --format esm --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@myblog/core": "*",
+    "@myblog/server": "*",
+    "commander": "^12.1.0",
+    "zod": "^4.6.5"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "name": "@myblog/desktop",
+  "version": "0.1.10",
+  "private": true,
+  "description": "Desktop shell for MyBlog (Electron).",
+  "type": "module",
+  "main": "dist/main.js",
+  "author": "MyBlog contributors",
+  "scripts": {
+    "build": "tsup",
+    "fix:native": "node scripts/patch-node-pty.mjs && electron-rebuild -f -w node-pty",
+    "start": "npm run build && electron .",
+    "dist": "node scripts/patch-node-pty.mjs && npm run build && electron-builder && node scripts/copy-changelog.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@myblog/core": "*",
+    "@myblog/server": "*",
+    "@types/node": "^22.10.0",
+    "electron": "44.4.2",
+    "electron-builder": "^26.15.3",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  },
+  "build": {
+    "appId": "dev.myblog.desktop",
+    "productName": "MyBlog",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
+  }
+}

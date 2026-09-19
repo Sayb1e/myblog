@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+release/
+
+# 本地测试/示例工作区
+test_1/
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+*.swp
+
