@@ -731,24 +731,33 @@ button.ghost {
   white-space: nowrap;
 }
 
-.segments {
-  display: flex;
-  gap: 3px;
-}
-
-.segments i {
-  width: 6px;
-  height: 18px;
-  border-radius: 3px;
+.cap-bar {
+  display: block;
+  height: 6px;
+  margin: 6px 0 2px;
+  border-radius: 999px;
   background: var(--seg);
+  overflow: hidden;
 }
 
-.segments.level-1 i:first-child {
-  background: var(--warn);
+.cap-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.3s ease;
 }
 
-.segments.level-2 i {
-  background: linear-gradient(180deg, var(--ok), #2aa858);
+.cap-bar.level-0 i {
+  background: var(--faint);
+}
+
+.cap-bar.level-1 i {
+  background: linear-gradient(90deg, var(--warn), #f0c060);
+}
+
+.cap-bar.level-2 i {
+  background: linear-gradient(90deg, var(--ok), #2aa858);
 }
 
 /* ---------- timeline ---------- */
@@ -1872,6 +1881,16 @@ body.no-anim *::after {
   transition: none !important;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
 body.compact .card {
   padding: 14px 16px;
 }
@@ -1936,6 +1955,103 @@ body.compact .setting-row {
 
 :root[data-style="product"] .today-card {
   background: linear-gradient(135deg, rgba(91, 140, 255, 0.2), rgba(154, 123, 255, 0.1) 55%, var(--glass));
+}
+
+/* ---------- code block ---------- */
+
+.md .code-block {
+  margin: 0.7em 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  overflow: hidden;
+}
+
+.md .code-block .code-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--inset);
+}
+
+.md .code-block .code-lang {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.md .code-block .code-copy {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.md .code-block .code-copy:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: var(--panel-2);
+}
+
+.md .code-block pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* ---------- chat actions ---------- */
+
+.bubble {
+  position: relative;
+}
+
+.bubble-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.16s;
+}
+
+.bubble:hover .bubble-actions {
+  opacity: 1;
+}
+
+.copy-btn {
+  padding: 3px 10px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.copy-btn:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.chat {
+  position: relative;
+}
+
+.scroll-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  background: var(--panel-2);
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
 }
 
 /* ---------- responsive ---------- */

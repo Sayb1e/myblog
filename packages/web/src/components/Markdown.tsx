@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { usePrefs } from "../prefs.js";
+import { CodeBlock, extractCode } from "./CodeBlock.js";
 
 const MarkdownContext = createContext<{ openDate?: (date: string) => void }>({});
 
@@ -31,6 +32,17 @@ export function Markdown({ children, inline }: Props) {
   const { prefs } = usePrefs();
 
   const components: Components = {
+    pre: ({ children }) => {
+      const child = Array.isArray(children) ? children[0] : children;
+      const className =
+        (child as { props?: { className?: string } } | null)?.props?.className ?? "";
+      const language = /language-([\w-]+)/.exec(className)?.[1] ?? "";
+      return (
+        <CodeBlock language={language} code={extractCode(children)}>
+          {children}
+        </CodeBlock>
+      );
+    },
     a: ({ href, children: label }) => {
       const date = dateFromHref(href);
       if (date && openDate) {

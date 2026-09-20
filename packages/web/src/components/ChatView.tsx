@@ -94,6 +94,27 @@ function ToolCardView({ tool }: { tool: ToolCard }) {
   );
 }
 
+function CopyButton({ text, label = "复制" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="copy-btn"
+      onClick={() => {
+        void navigator.clipboard
+          ?.writeText(text)
+          .then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
+          })
+          .catch(() => undefined);
+      }}
+    >
+      {copied ? "已复制" : label}
+    </button>
+  );
+}
+
 export function ChatView() {
   const toast = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -106,7 +127,9 @@ export function ChatView() {
   const [apiKey, setApiKey] = useState("");
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -154,6 +177,12 @@ export function ChatView() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streaming]);
+
+  const onScroll = (): void => {
+    const element = bodyRef.current;
+    if (!element) return;
+    setAtBottom(element.scrollHeight - element.scrollTop - element.clientHeight < 48);
+  };
 
   const saveSettings = async (): Promise<void> => {
     try {
@@ -311,7 +340,7 @@ export function ChatView() {
         </div>
       )}
 
-      <div className="chat-body">
+      <div className="chat-body" ref={bodyRef} onScroll={onScroll}>
         {messages.length === 0 && (
           <div className="chat-empty">
             <div className="chat-empty-mark">✦</div>
@@ -337,6 +366,11 @@ export function ChatView() {
                 ) : (
                   <Markdown>{message.content}</Markdown>
                 ))}
+              {message.role === "assistant" && message.content && (
+                <div className="bubble-actions">
+                  <CopyButton text={message.content} />
+                </div>
+              )}
               {message.tools.length > 0 && (
                 <div className="tool-list">
                   {message.tools.map((tool, index) => (
@@ -349,6 +383,12 @@ export function ChatView() {
         })}
         <div ref={bottomRef} />
       </div>
+
+      {!atBottom && (
+        <button type="button" className="scroll-bottom" onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}>
+          ↓ 到底部
+        </button>
+      )}
 
       <div className="chat-input">
         <textarea

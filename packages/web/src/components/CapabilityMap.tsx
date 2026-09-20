@@ -13,6 +13,8 @@ function level(status: string): 0 | 1 | 2 {
   return 1;
 }
 
+const PERCENT = [6, 55, 100] as const;
+
 export function CapabilityMap({ capabilities, selected, onSelect }: Props) {
   return (
     <section className="card">
@@ -48,14 +50,12 @@ export function CapabilityMap({ capabilities, selected, onSelect }: Props) {
                   <span className="cap-question">
                     <Markdown inline>{capability.question}</Markdown>
                   </span>
+                  <span className={`cap-bar level-${stage}`}>
+                    <i style={{ width: `${PERCENT[stage]}%` }} />
+                  </span>
                   <span className="cap-status">
                     <Markdown inline>{capability.status}</Markdown>
                   </span>
-                </span>
-                <span className={`segments level-${stage}`}>
-                  <i />
-                  <i />
-                  <i />
                 </span>
               </div>
             </li>
