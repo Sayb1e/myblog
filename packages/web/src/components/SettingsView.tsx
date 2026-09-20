@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { errorMessage, getStorage, saveStorage, type StorageView } from "../api.js";
+import { useToast } from "../hooks/useToasts.js";
 import { usePrefs, type Prefs, type StylePref, type ThemePref } from "../prefs.js";
 
 interface Props {
@@ -6,11 +8,12 @@ interface Props {
   version: string;
 }
 
-type CategoryId = "ui" | "features" | "about";
+type CategoryId = "ui" | "features" | "storage" | "about";
 
 const CATEGORIES: { id: CategoryId; label: string; icon: string }[] = [
   { id: "ui", label: "界面", icon: "◨" },
   { id: "features", label: "功能", icon: "⚙" },
+  { id: "storage", label: "存储", icon: "▤" },
   { id: "about", label: "关于", icon: "ⓘ" },
 ];
 
@@ -37,6 +40,42 @@ function Toggle({ prefKey, label, hint }: { prefKey: BooleanPrefKey; label: stri
 export function SettingsView({ root, version }: Props) {
   const [category, setCategory] = useState<CategoryId>("ui");
   const { prefs, setPref } = usePrefs();
+  const toast = useToast();
+  const [storage, setStorage] = useState<StorageView | null>(null);
+  const [agentPath, setAgentPath] = useState("");
+  const [historyPath, setHistoryPath] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const next = await getStorage();
+        setStorage(next);
+        setAgentPath(next.agentConfigPath);
+        setHistoryPath(next.historyDir);
+      } catch (caught) {
+        toast("error", errorMessage(caught));
+      }
+    })();
+  }, [toast]);
+
+  const canPick = typeof window !== "undefined" && Boolean(window.myblog?.pickDirectory);
+
+  const pickInto = async (apply: (value: string) => void): Promise<void> => {
+    const picked = await window.myblog?.pickDirectory?.();
+    if (picked) apply(picked);
+  };
+
+  const savePaths = async (): Promise<void> => {
+    try {
+      const next = await saveStorage({ agentConfigPath: agentPath, historyDir: historyPath });
+      setStorage(next);
+      setAgentPath(next.agentConfigPath);
+      setHistoryPath(next.historyDir);
+      toast("success", "存储位置已保存");
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
 
   return (
     <div className="settings">
@@ -115,6 +154,55 @@ export function SettingsView({ root, version }: Props) {
               label="实时同步"
               hint="监听工作区文件变化并自动刷新界面；关闭后只能手动刷新。"
             />
+          </>
+        )}
+
+        {category === "storage" && (
+          <>
+            <div className="card-head">
+              <h2>存储</h2>
+            </div>
+            <div className="setting-field">
+              <strong>模型配置文件</strong>
+              <p className="muted">对话使用的 provider / key 配置（agent.json）。改到别处后，旧文件不会被自动搬移。</p>
+              <div className="path-input">
+                <input value={agentPath} onChange={(event) => setAgentPath(event.target.value)} spellCheck={false} />
+                {canPick && (
+                  <button type="button" onClick={() => void pickInto(setAgentPath)}>
+                    浏览…
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="setting-field">
+              <strong>对话历史目录</strong>
+              <p className="muted">按工作区在该目录下各存一个 JSON 文件。</p>
+              <div className="path-input">
+                <input value={historyPath} onChange={(event) => setHistoryPath(event.target.value)} spellCheck={false} />
+                {canPick && (
+                  <button type="button" onClick={() => void pickInto(setHistoryPath)}>
+                    浏览…
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="row">
+              <button type="button" className="primary" onClick={() => void savePaths()}>
+                保存
+              </button>
+              {storage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAgentPath(storage.defaults.agentConfigPath);
+                    setHistoryPath(storage.defaults.historyDir);
+                  }}
+                >
+                  恢复默认值
+                </button>
+              )}
+              <span className="muted">这些设置存在本地（仓库外），不会写进学习仓，也不会提交到 git。</span>
+            </div>
           </>
         )}
 

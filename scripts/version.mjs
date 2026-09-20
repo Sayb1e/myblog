@@ -6,7 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const version = process.argv[2];
 
 if (!version || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-  console.error("用法: npx version:bump <version>，例如 0.1.1（0.x 为测试版）");
+  console.error("用法: npx version:bump <version>，例如 1.0.1");
   process.exit(1);
 }
 

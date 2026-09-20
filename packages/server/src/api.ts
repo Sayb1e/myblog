@@ -1,8 +1,9 @@
 import { readFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import path from "node:path";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { runAgent, saveAgentConfig, viewAgentConfig } from "@myblog/agent";
+import { runAgent, saveAgentConfig, viewAgentConfig, defaultAgentConfigPath } from "@myblog/agent";
 import {
   Workspace,
   buildPlan,
@@ -12,7 +13,8 @@ import {
   type ScaffoldOptions,
 } from "@myblog/core";
 import { createWorkspaceWatcher } from "./watcher.js";
-import { defaultHistoryDir, readHistory, writeHistory, type StoredMessage } from "./history.js";
+import { readHistory, writeHistory, type StoredMessage } from "./history.js";
+import { defaultStorageSettings, readStorage, writeStorage, type StorageSettings } from "./storage.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -28,7 +30,34 @@ export interface ApiOptions {
 export function createApi(root: string, options: ApiOptions = {}): Hono {
   const api = new Hono();
   const get = (): Promise<Workspace> => Workspace.load(root);
-  const historyDir = options.historyDir ?? process.env.MYBLOG_HISTORY_DIR ?? defaultHistoryDir();
+
+  const defaults: StorageSettings = {
+    agentConfigPath: options.agentConfigPath ?? defaultAgentConfigPath(),
+    historyDir: options.historyDir ?? process.env.MYBLOG_HISTORY_DIR ?? defaultStorageSettings().historyDir,
+  };
+  const storageFile = path.join(path.dirname(defaults.agentConfigPath), "settings.json");
+
+  let storage: StorageSettings | null = null;
+  const getStorage = async (): Promise<StorageSettings> => {
+    if (!storage) storage = await readStorage(storageFile, defaults);
+    return storage;
+  };
+  const setStorage = async (patch: Partial<StorageSettings>): Promise<StorageSettings> => {
+    const current = await getStorage();
+    const next: StorageSettings = {
+      agentConfigPath:
+        typeof patch.agentConfigPath === "string" && patch.agentConfigPath !== ""
+          ? path.resolve(patch.agentConfigPath)
+          : current.agentConfigPath,
+      historyDir:
+        typeof patch.historyDir === "string" && patch.historyDir !== ""
+          ? path.resolve(patch.historyDir)
+          : current.historyDir,
+    };
+    await writeStorage(storageFile, next);
+    storage = next;
+    return next;
+  };
 
   if (options.token) {
     const token = options.token;
@@ -149,24 +178,34 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
     return c.json(await (await get()).closeDay(input, { dryRun: body.dryRun }));
   });
 
-  api.get("/agent", async (c) => c.json(await viewAgentConfig(options.agentConfigPath)));
+  api.get("/agent", async (c) => c.json(await viewAgentConfig((await getStorage()).agentConfigPath)));
 
   api.put("/agent", async (c) => {
     const body = await c.req.json<{ baseURL?: string; model?: string; apiKey?: string; temperature?: number }>();
-    await saveAgentConfig(body, options.agentConfigPath);
-    return c.json(await viewAgentConfig(options.agentConfigPath));
+    const configPath = (await getStorage()).agentConfigPath;
+    await saveAgentConfig(body, configPath);
+    return c.json(await viewAgentConfig(configPath));
   });
 
-  api.get("/chat/history", async (c) => c.json({ messages: await readHistory(root, historyDir) }));
+  api.get("/storage", async (c) => c.json({ ...(await getStorage()), defaults }));
+
+  api.put("/storage", async (c) => {
+    const body = await c.req.json<{ agentConfigPath?: string; historyDir?: string }>();
+    return c.json({ ...(await setStorage(body)), defaults });
+  });
+
+  api.get("/chat/history", async (c) =>
+    c.json({ messages: await readHistory(root, (await getStorage()).historyDir) }),
+  );
 
   api.put("/chat/history", async (c) => {
     const body = await c.req.json<{ messages?: StoredMessage[] }>();
-    await writeHistory(root, historyDir, Array.isArray(body.messages) ? body.messages : []);
+    await writeHistory(root, (await getStorage()).historyDir, Array.isArray(body.messages) ? body.messages : []);
     return c.json({ ok: true });
   });
 
   api.delete("/chat/history", async (c) => {
-    await writeHistory(root, historyDir, []);
+    await writeHistory(root, (await getStorage()).historyDir, []);
     return c.json({ ok: true });
   });
 
@@ -177,6 +216,7 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
       .map((message) => ({ role: message.role as "user" | "assistant", content: message.content ?? "" }));
 
     const workspace = await get();
+    const agentConfigPath = (await getStorage()).agentConfigPath;
     return streamSSE(c, async (stream) => {
       const abort = new AbortController();
       stream.onAbort(() => abort.abort());
@@ -184,7 +224,7 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
       for await (const event of runAgent({
         workspace,
         messages,
-        configPath: options.agentConfigPath,
+        configPath: agentConfigPath,
         signal: abort.signal,
       })) {
         if (abort.signal.aborted) break;

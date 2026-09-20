@@ -1,6 +1,6 @@
 {
   "name": "@myblog/cli",
-  "version": "0.1.10",
+  "version": "1.0.0",
   "description": "Command line interface for MyBlog.",
   "type": "module",
   "license": "MIT",

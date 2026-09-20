@@ -1,6 +1,6 @@
 {
   "name": "@myblog/server",
-  "version": "0.1.10",
+  "version": "1.0.0",
   "description": "Local web server and API for MyBlog.",
   "type": "module",
   "license": "MIT",

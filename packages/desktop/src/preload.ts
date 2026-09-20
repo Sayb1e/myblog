@@ -8,6 +8,7 @@ export interface TerminalOptions {
 
 contextBridge.exposeInMainWorld("myblog", {
   desktop: true,
+  pickDirectory: () => ipcRenderer.invoke("dialog:pick-directory") as Promise<string | null>,
   terminal: {
     create: (options: TerminalOptions) =>
       ipcRenderer.invoke("terminal:create", options) as Promise<{ id: number; shell: string }>,

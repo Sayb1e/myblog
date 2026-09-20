@@ -26,15 +26,15 @@ npm run app            # build 全部 + 启动 Electron
 
 ## 版本规则（重要）
 
-- **0.x 表示测试/预发布阶段。**
+- **1.x 起为正式版本**（历史上的 0.x 为测试/预发布阶段）。
 - **每次产生用户可见改动，都要 bump 版本，并保持所有包一致：**
   ```bash
-  npm run version:bump -- 0.1.1
+  npm run version:bump -- 1.0.1
   ```
 - bump 时会在根 `CHANGELOG.md` 自动插入 `## [x.y.z]` 占位条目，**必须补充内容**（改成实际改动）。
 - 桌面打包后，`CHANGELOG.md` 会自动复制到 `packages/desktop/release/`，与 exe 放一起。
 - 不要手写版本号到代码里。CLI/MCP 的版本从各自 `package.json` 读取（`packages/cli/src/version.ts`），桌面端用 `app.getVersion()`。
-- 打包后的桌面文件名会带版本号（如 `MyBlog 0.1.0.exe`）。
+- 打包后的桌面文件名会带版本号（如 `MyBlog 1.0.0.exe`）。
 
 ## 写回原则
 

@@ -1,6 +1,6 @@
 {
   "name": "myblog",
-  "version": "0.1.10",
+  "version": "1.0.0",
   "private": true,
   "description": "A local web app + CLI that manages a markdown-based learning workspace.",
   "type": "module",

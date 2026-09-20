@@ -90,6 +90,17 @@ export const getAgentConfig = (): Promise<AgentConfigView> => request("/api/agen
 export const saveAgentConfig = (patch: { baseURL?: string; model?: string; apiKey?: string }): Promise<AgentConfigView> =>
   request("/api/agent", { method: "PUT", ...json(patch) });
 
+export interface StorageView {
+  agentConfigPath: string;
+  historyDir: string;
+  defaults: { agentConfigPath: string; historyDir: string };
+}
+
+export const getStorage = (): Promise<StorageView> => request("/api/storage");
+
+export const saveStorage = (patch: { agentConfigPath?: string; historyDir?: string }): Promise<StorageView> =>
+  request("/api/storage", { method: "PUT", ...json(patch) });
+
 export type ChatEvent =
   | { type: "text"; text: string }
   | { type: "tool_start"; name: string; args: string }

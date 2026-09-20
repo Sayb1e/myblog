@@ -1,6 +1,6 @@
 {
   "name": "@myblog/agent",
-  "version": "0.1.10",
+  "version": "1.0.0",
   "description": "Model-agnostic chat agent for MyBlog (OpenAI-compatible).",
   "type": "module",
   "license": "MIT",

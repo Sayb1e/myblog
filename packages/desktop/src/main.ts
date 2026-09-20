@@ -78,6 +78,14 @@ function registerTerminalIpc(): void {
     terminals.delete(payload.id);
     term.kill();
   });
+
+  ipcMain.handle("dialog:pick-directory", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "选择目录",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
+  });
 }
 
 function webRoot(): string {

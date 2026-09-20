@@ -1435,6 +1435,39 @@ button.ghost {
   font-size: 12px;
 }
 
+.setting-field {
+  display: grid;
+  gap: 6px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.setting-field strong {
+  font-size: 14px;
+}
+
+.setting-field input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.path-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.path-input input {
+  flex: 1;
+  min-width: 0;
+}
+
 .setting-select {
   flex: none;
   padding: 8px 34px 8px 12px;

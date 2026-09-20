@@ -14,6 +14,7 @@ declare global {
   interface Window {
     myblog?: {
       desktop?: boolean;
+      pickDirectory?: () => Promise<string | null>;
       terminal?: MyBlogTerminalApi;
     };
   }
