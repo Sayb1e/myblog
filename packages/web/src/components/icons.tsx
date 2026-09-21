@@ -76,3 +76,191 @@ export function IconSettings(props: IconProps) {
     </Base>
   );
 }
+
+export function IconSun(props: IconProps) {
+  return (
+    <Base {...props}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </Base>
+  );
+}
+
+export function IconMoon(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+    </Base>
+  );
+}
+
+export function IconContrast(props: IconProps) {
+  return (
+    <Base {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor" stroke="none" />
+    </Base>
+  );
+}
+
+export function IconChevronDown(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M6 9l6 6 6-6" />
+    </Base>
+  );
+}
+
+export function IconChevron(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M15 6l-6 6 6 6" />
+    </Base>
+  );
+}
+
+export function IconRefresh(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+      <path d="M20 4v7h-7" />
+    </Base>
+  );
+}
+
+export function IconClose(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </Base>
+  );
+}
+
+export function IconMinimize(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M5 12h14" />
+    </Base>
+  );
+}
+
+export function IconMaximize(props: IconProps) {
+  return (
+    <Base {...props}>
+      <rect x="5" y="5" width="14" height="14" rx="1.5" />
+    </Base>
+  );
+}
+
+export function IconRestore(props: IconProps) {
+  return (
+    <Base {...props}>
+      <rect x="8" y="8" width="11" height="11" rx="1.5" />
+      <path d="M5 16V6.5A1.5 1.5 0 0 1 6.5 5H16" />
+    </Base>
+  );
+}
+
+export function IconCopy(props: IconProps) {
+  return (
+    <Base {...props}>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+    </Base>
+  );
+}
+
+export function IconDownload(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M12 3v11M7 10l5 5 5-5M4 20h16" />
+    </Base>
+  );
+}
+
+export function IconSearch(props: IconProps) {
+  return (
+    <Base {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </Base>
+  );
+}
+
+export function IconTrash(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+    </Base>
+  );
+}
+
+export function IconSpark(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15l-1.8-4.2L5.5 9l4.7-1.3z" />
+      <path d="M18 16l.8 2.2L21 19l-2.2.8L18 22l-.8-2.2L15 19l2.2-.8z" />
+    </Base>
+  );
+}
+
+export function IconCommand(props: IconProps) {
+  return (
+    <Base {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M9 9h6v6H9zM9 15H7.5a1.5 1.5 0 1 0 1.5 1.5zM15 9h1.5A1.5 1.5 0 1 0 15 7.5z" />
+    </Base>
+  );
+}
+
+export function IconArrowDown(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M12 5v14M6 13l6 6 6-6" />
+    </Base>
+  );
+}
+
+export function IconInfo(props: IconProps) {
+  return (
+    <Base {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
+    </Base>
+  );
+}
+
+export function IconSliders(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="17" r="2" />
+    </Base>
+  );
+}
+
+export function IconFolder(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M3 6h6l2 2h10v10H3z" />
+    </Base>
+  );
+}
+
+export function IconPlus(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </Base>
+  );
+}
+
+export function IconPencil(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="M14 6l4 4" />
+    </Base>
+  );
+}

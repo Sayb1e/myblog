@@ -7,5 +7,6 @@ export * from "./goals.js";
 export * from "./daily.js";
 export * from "./status.js";
 export * from "./context.js";
+export * from "./bootstrap.js";
 export * from "./check.js";
 export * from "./workspace.js";

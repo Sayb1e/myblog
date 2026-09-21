@@ -9,6 +9,15 @@ export interface TerminalOptions {
 contextBridge.exposeInMainWorld("myblog", {
   desktop: true,
   pickDirectory: () => ipcRenderer.invoke("dialog:pick-directory") as Promise<string | null>,
+  setTheme: (theme: "dark" | "light" | "system") => ipcRenderer.send("theme:set", theme),
+  windowControls: {
+    minimize: () => ipcRenderer.send("window:minimize"),
+    toggleMaximize: () => ipcRenderer.send("window:toggle-maximize"),
+    close: () => ipcRenderer.send("window:close"),
+    onMaximized: (listener: (maximized: boolean) => void) => {
+      ipcRenderer.on("window:maximized", (_event, maximized: boolean) => listener(maximized));
+    },
+  },
   terminal: {
     create: (options: TerminalOptions) =>
       ipcRenderer.invoke("terminal:create", options) as Promise<{ id: number; shell: string }>,

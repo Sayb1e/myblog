@@ -23,13 +23,33 @@ export interface TodayPlan {
   lastDate: string;
   lastNext: string;
   lastSkills: string[];
+  missing: string[];
 }
 
 export function activeSkillIds(goals: GoalsDoc): string[] {
   return goals.stageIds;
 }
 
-export function buildPlan(status: WorkspaceStatus, lastSummary?: SummaryDoc | null): TodayPlan {
+export function inferStageIds(overview: OverviewDoc): string[] {
+  return [...new Set(overview.progress.next.match(/G\d+/g) ?? [])];
+}
+
+export function emptyStatus(): WorkspaceStatus {
+  return {
+    stage: "",
+    stageIds: [],
+    capabilities: [],
+    progress: { learned: "", next: "", latest: "" },
+    records: [],
+    directions: [],
+  };
+}
+
+export function buildPlan(
+  status: WorkspaceStatus,
+  lastSummary?: SummaryDoc | null,
+  missing: string[] = [],
+): TodayPlan {
   return {
     stage: status.stage,
     stageIds: status.stageIds,
@@ -38,11 +58,12 @@ export function buildPlan(status: WorkspaceStatus, lastSummary?: SummaryDoc | nu
     lastDate: lastSummary?.date ?? status.records[0]?.date ?? "",
     lastNext: lastSummary?.next ?? "",
     lastSkills: lastSummary?.skills ?? [],
+    missing,
   };
 }
 
 export function buildStatus(overview: OverviewDoc, goals: GoalsDoc): WorkspaceStatus {
-  const stageIds = activeSkillIds(goals);
+  const stageIds = goals.stageIds.length > 0 ? goals.stageIds : inferStageIds(overview);
   return {
     stage: goals.currentStage,
     stageIds,

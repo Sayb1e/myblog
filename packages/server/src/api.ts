@@ -1,19 +1,29 @@
-import { readFile, mkdir, readdir, writeFile } from "node:fs/promises";
+﻿import { readFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { runAgent, saveAgentConfig, viewAgentConfig, defaultAgentConfigPath } from "@myblog/agent";
+import { runAgent, saveAgentConfig, viewAgentConfig } from "@myblog/agent";
 import {
   Workspace,
   buildPlan,
+  emptyStatus,
   updateProgress,
   type CloseDayInput,
   type ProgressSnapshot,
   type ScaffoldOptions,
 } from "@myblog/core";
 import { createWorkspaceWatcher } from "./watcher.js";
-import { readHistory, writeHistory, type StoredMessage } from "./history.js";
+import {
+  activateSession,
+  createSession,
+  deleteSession,
+  listSessions,
+  readActive,
+  renameSession,
+  writeActive,
+  type StoredMessage,
+} from "./history.js";
 import { defaultStorageSettings, readStorage, writeStorage, type StorageSettings } from "./storage.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,22 +35,41 @@ export interface ApiOptions {
   token?: string;
   agentConfigPath?: string;
   historyDir?: string;
+  workspaces?: string[];
 }
 
 export function createApi(root: string, options: ApiOptions = {}): Hono {
   const api = new Hono();
-  const get = (): Promise<Workspace> => Workspace.load(root);
 
-  const defaults: StorageSettings = {
-    agentConfigPath: options.agentConfigPath ?? defaultAgentConfigPath(),
-    historyDir: options.historyDir ?? process.env.MYBLOG_HISTORY_DIR ?? defaultStorageSettings().historyDir,
-  };
+  const defaults: StorageSettings = defaultStorageSettings(path.resolve(root));
+  if (options.agentConfigPath) defaults.agentConfigPath = options.agentConfigPath;
+  if (options.historyDir) defaults.historyDir = options.historyDir;
+  else if (process.env.MYBLOG_HISTORY_DIR) defaults.historyDir = process.env.MYBLOG_HISTORY_DIR;
+  if (options.workspaces) {
+    defaults.workspaces = [
+      ...new Set([path.resolve(root), ...options.workspaces.map((entry) => path.resolve(entry))]),
+    ];
+  }
   const storageFile = path.join(path.dirname(defaults.agentConfigPath), "settings.json");
 
   let storage: StorageSettings | null = null;
+  let currentRoot = defaults.activeWorkspace;
+
   const getStorage = async (): Promise<StorageSettings> => {
-    if (!storage) storage = await readStorage(storageFile, defaults);
+    if (!storage) {
+      storage = await readStorage(storageFile, defaults);
+      currentRoot = storage.activeWorkspace;
+    }
     return storage;
+  };
+  const persist = async (next: StorageSettings): Promise<void> => {
+    await writeStorage(storageFile, next);
+    storage = next;
+    currentRoot = next.activeWorkspace;
+  };
+  const get = async (): Promise<Workspace> => {
+    await getStorage();
+    return Workspace.load(currentRoot);
   };
   const setStorage = async (patch: Partial<StorageSettings>): Promise<StorageSettings> => {
     const current = await getStorage();
@@ -53,9 +82,10 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
         typeof patch.historyDir === "string" && patch.historyDir !== ""
           ? path.resolve(patch.historyDir)
           : current.historyDir,
+      workspaces: current.workspaces,
+      activeWorkspace: current.activeWorkspace,
     };
-    await writeStorage(storageFile, next);
-    storage = next;
+    await persist(next);
     return next;
   };
 
@@ -66,23 +96,59 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
       if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
       const header = c.req.header("x-myblog-token") ?? c.req.header("authorization") ?? "";
       const provided = header.startsWith("Bearer ") ? header.slice(7) : header;
-      if (provided !== token) return c.json({ error: "需要有效的 MyBlog token" }, 401);
+      if (provided !== token) return c.json({ error: "闇€瑕佹湁鏁堢殑 MyBlog token" }, 401);
       return next();
     });
   }
 
   api.get("/status", async (c) => {
     const workspace = await get();
-    const status = await workspace.readStatus();
-    return c.json({ root: workspace.root, version: VERSION, ...status });
+    const { initialized, status } = await workspace.readStatusSafe();
+    return c.json({ root: workspace.root, version: VERSION, initialized, ...(status ?? emptyStatus()) });
+  });
+
+  api.post("/init", async (c) => {
+    const workspace = await get();
+    return c.json(await workspace.initWorkspace());
+  });
+
+  api.get("/workspaces", async (c) => {
+    const current = await getStorage();
+    return c.json({ active: current.activeWorkspace, list: current.workspaces });
+  });
+
+  api.post("/workspaces", async (c) => {
+    const body = await c.req.json<{ path?: string }>();
+    if (!body.path) return c.json({ error: "缂哄皯 path" }, 400);
+    const resolved = path.resolve(body.path);
+    const current = await getStorage();
+    const list = current.workspaces.includes(resolved) ? current.workspaces : [...current.workspaces, resolved];
+    await persist({ ...current, workspaces: list, activeWorkspace: resolved });
+    return c.json({ active: resolved, list });
+  });
+
+  api.post("/workspace", async (c) => {
+    const body = await c.req.json<{ path?: string }>();
+    if (!body.path) return c.json({ error: "缂哄皯 path" }, 400);
+    const resolved = path.resolve(body.path);
+    const current = await getStorage();
+    if (!current.workspaces.includes(resolved)) return c.json({ error: "璇ュ伐浣滃尯涓嶅湪鐧藉悕鍗曞唴" }, 403);
+    await persist({ ...current, activeWorkspace: resolved });
+    return c.json({ active: resolved, list: current.workspaces });
   });
 
   api.get("/check", async (c) => c.json(await (await get()).check()));
 
   api.get("/today", async (c) => {
     const workspace = await get();
-    const status = await workspace.readStatus();
+    const { initialized, status } = await workspace.readStatusSafe();
+    if (!initialized || !status) return c.json(buildPlan(emptyStatus(), null, ["overview"]));
+
+    const missing: string[] = [];
+    if (!(await workspace.hasGoals())) missing.push("goals");
     const lastDate = status.records[0]?.date ?? "";
+    if (!lastDate) missing.push("latest-summary");
+
     let summary = null;
     if (lastDate) {
       try {
@@ -91,7 +157,7 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
         summary = null;
       }
     }
-    return c.json(buildPlan(status, summary));
+    return c.json(buildPlan(status, summary, missing));
   });
 
   api.get("/summaries", async (c) => {
@@ -116,7 +182,7 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
 
   api.get("/summaries/:date", async (c) => {
     const date = c.req.param("date");
-    if (!DATE.test(date)) return c.json({ error: "日期格式应为 YYYY-MM-DD" }, 400);
+    if (!DATE.test(date)) return c.json({ error: "鏃ユ湡鏍煎紡搴斾负 YYYY-MM-DD" }, 400);
     const workspace = await get();
     try {
       return c.json({ exists: true, summary: await workspace.readSummary(date) });
@@ -127,9 +193,9 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
 
   api.put("/summaries/:date", async (c) => {
     const date = c.req.param("date");
-    if (!DATE.test(date)) return c.json({ error: "日期格式应为 YYYY-MM-DD" }, 400);
+    if (!DATE.test(date)) return c.json({ error: "鏃ユ湡鏍煎紡搴斾负 YYYY-MM-DD" }, 400);
     const body = await c.req.json<{ content?: string }>();
-    if (typeof body.content !== "string") return c.json({ error: "缺少 content" }, 400);
+    if (typeof body.content !== "string") return c.json({ error: "缂哄皯 content" }, 400);
 
     const workspace = await get();
     await mkdir(workspace.dayDir(date), { recursive: true });
@@ -153,7 +219,7 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
 
   api.post("/scaffold", async (c) => {
     const body = await c.req.json<{ date?: string } & ScaffoldOptions>();
-    if (!body.date || !DATE.test(body.date)) return c.json({ error: "日期格式应为 YYYY-MM-DD" }, 400);
+    if (!body.date || !DATE.test(body.date)) return c.json({ error: "鏃ユ湡鏍煎紡搴斾负 YYYY-MM-DD" }, 400);
 
     const scaffold: ScaffoldOptions = {};
     if (body.preview !== undefined) scaffold.preview = body.preview;
@@ -165,7 +231,7 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
 
   api.post("/close", async (c) => {
     const body = await c.req.json<CloseDayInput & { dryRun?: boolean }>();
-    if (!body.date || !DATE.test(body.date)) return c.json({ error: "日期格式应为 YYYY-MM-DD" }, 400);
+    if (!body.date || !DATE.test(body.date)) return c.json({ error: "鏃ユ湡鏍煎紡搴斾负 YYYY-MM-DD" }, 400);
 
     const input: CloseDayInput = { date: body.date };
     if (body.learned !== undefined) input.learned = body.learned;
@@ -194,18 +260,39 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
     return c.json({ ...(await setStorage(body)), defaults });
   });
 
-  api.get("/chat/history", async (c) =>
-    c.json({ messages: await readHistory(root, (await getStorage()).historyDir) }),
+  api.get("/chat/sessions", async (c) => c.json(await listSessions(currentRoot, (await getStorage()).historyDir)));
+
+  api.post("/chat/sessions", async (c) => {
+    const body = await c.req.json<{ title?: string }>().catch(() => ({ title: undefined as string | undefined }));
+    return c.json(await createSession(currentRoot, (await getStorage()).historyDir, body.title));
+  });
+
+  api.post("/chat/sessions/:id/activate", async (c) =>
+    c.json(await activateSession(currentRoot, (await getStorage()).historyDir, c.req.param("id"))),
   );
+
+  api.patch("/chat/sessions/:id", async (c) => {
+    const body = await c.req.json<{ title?: string }>();
+    if (typeof body.title !== "string" || body.title.trim() === "") {
+      return c.json({ error: "缺少 title" }, 400);
+    }
+    return c.json(await renameSession(currentRoot, (await getStorage()).historyDir, c.req.param("id"), body.title));
+  });
+
+  api.delete("/chat/sessions/:id", async (c) =>
+    c.json(await deleteSession(currentRoot, (await getStorage()).historyDir, c.req.param("id"))),
+  );
+
+  api.get("/chat/history", async (c) => c.json(await readActive(currentRoot, (await getStorage()).historyDir)));
 
   api.put("/chat/history", async (c) => {
     const body = await c.req.json<{ messages?: StoredMessage[] }>();
-    await writeHistory(root, (await getStorage()).historyDir, Array.isArray(body.messages) ? body.messages : []);
+    await writeActive(currentRoot, (await getStorage()).historyDir, Array.isArray(body.messages) ? body.messages : []);
     return c.json({ ok: true });
   });
 
   api.delete("/chat/history", async (c) => {
-    await writeHistory(root, (await getStorage()).historyDir, []);
+    await writeActive(currentRoot, (await getStorage()).historyDir, []);
     return c.json({ ok: true });
   });
 
@@ -240,7 +327,7 @@ export function createApi(root: string, options: ApiOptions = {}): Hono {
   api.get("/events", (c) =>
     streamSSE(c, async (stream) => {
       let open = true;
-      const dispose = createWorkspaceWatcher(root, () => {
+      const dispose = createWorkspaceWatcher(currentRoot, () => {
         void stream.writeSSE({ event: "change", data: String(Date.now()) });
       });
 

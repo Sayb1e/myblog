@@ -34,6 +34,7 @@ export function CapabilityMap({ capabilities, selected, onSelect }: Props) {
                 className={`capability${isActive ? " selected" : ""}${capability.active ? " current" : ""}`}
                 role="button"
                 tabIndex={0}
+                title={`${capability.id} ${capability.name} — ${capability.question}`}
                 onClick={() => onSelect(isActive ? null : capability.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -51,8 +52,11 @@ export function CapabilityMap({ capabilities, selected, onSelect }: Props) {
                   <span className="cap-question">
                     <Markdown inline>{capability.question}</Markdown>
                   </span>
-                  <span className={`cap-bar level-${stage}`}>
-                    <i style={{ width: `${PERCENT[stage]}%` }} />
+                  <span className="cap-meter">
+                    <span className={`cap-bar level-${stage}`}>
+                      <i style={{ width: `${PERCENT[stage]}%` }} />
+                    </span>
+                    <span className="cap-percent">{PERCENT[stage]}%</span>
                   </span>
                   <span className="cap-status">
                     <Markdown inline>{capability.status}</Markdown>

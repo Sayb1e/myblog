@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from "electron";
 import * as pty from "node-pty";
 import { startServer } from "@myblog/server";
 
@@ -86,6 +86,20 @@ function registerTerminalIpc(): void {
     });
     return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
   });
+
+  ipcMain.on("theme:set", (_event, theme: "dark" | "light" | "system") => {
+    if (theme !== "dark" && theme !== "light" && theme !== "system") return;
+    nativeTheme.themeSource = theme;
+    if (win) win.setBackgroundColor(theme === "light" ? "#f4f6fb" : "#0a0c11");
+  });
+
+  ipcMain.on("window:minimize", () => win?.minimize());
+  ipcMain.on("window:toggle-maximize", () => {
+    if (!win) return;
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  });
+  ipcMain.on("window:close", () => win?.close());
 }
 
 function webRoot(): string {
@@ -172,6 +186,7 @@ async function createWindow(): Promise<void> {
     minHeight: 600,
     backgroundColor: "#0b0d12",
     title: "MyBlog",
+    frame: false,
     webPreferences: {
       preload: path.join(here, "preload.cjs"),
       contextIsolation: true,
@@ -180,6 +195,8 @@ async function createWindow(): Promise<void> {
     },
   });
   win.setMenuBarVisibility(false);
+  win.on("maximize", () => win?.webContents.send("window:maximized", true));
+  win.on("unmaximize", () => win?.webContents.send("window:maximized", false));
   win.on("closed", () => {
     win = null;
   });

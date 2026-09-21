@@ -1,18 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  clearChatHistory,
+  activateSession,
+  createSession,
+  deleteSession,
   errorMessage,
   getAgentConfig,
   getChatHistory,
+  getSessions,
+  renameSession,
   saveAgentConfig,
   saveChatHistory,
   streamChat,
   type AgentConfigView,
   type ChatEvent,
   type ChatMessageRecord,
+  type SessionMeta,
 } from "../api.js";
 import { useToast } from "../hooks/useToasts.js";
+import { IconArrowDown, IconPencil, IconPlus, IconSpark, IconTrash } from "./icons.js";
 import { Markdown } from "./Markdown.js";
+import { Select } from "./Select.js";
 import { Spinner } from "./Spinner.js";
 
 interface ToolCard {
@@ -52,6 +59,23 @@ const SUGGESTIONS = ["今天学什么？", "帮我收工写回", "校验一下�
 
 let nextId = 1;
 
+function DiffView({ lines }: { lines: string[] }) {
+  return (
+    <div className="tool-diff">
+      {lines.map((line, index) => (
+        <div
+          key={index}
+          className={
+            line.startsWith("+") ? "diff-add" : line.startsWith("-") ? "diff-del" : "diff-ctx"
+          }
+        >
+          {line || " "}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ToolCardView({ tool }: { tool: ToolCard }) {
   const meta = TOOL_META[tool.name] ?? { label: tool.name, icon: "⚙" as const };
   const result = (tool.result ?? {}) as Record<string, unknown>;
@@ -81,7 +105,7 @@ function ToolCardView({ tool }: { tool: ToolCard }) {
       {diff && diff.length > 0 && (
         <details className="tool-details" open={isPreview}>
           <summary>{isPreview ? "改动预览（确认后才会写入）" : "改动"}</summary>
-          <pre className="tool-diff">{diff.join("\n")}</pre>
+          <DiffView lines={diff} />
         </details>
       )}
       {!diff && !error && !tool.pending && (
@@ -126,10 +150,16 @@ export function ChatView() {
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [activeSession, setActiveSession] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const lastAssistantId = [...messages].reverse().find((message) => message.role === "assistant")?.id ?? -1;
 
   const loadConfig = useCallback(async () => {
     try {
@@ -147,24 +177,32 @@ export function ChatView() {
     void loadConfig();
   }, [loadConfig]);
 
+  const loadActive = useCallback(async (): Promise<void> => {
+    const stored = await getChatHistory();
+    const list = Array.isArray(stored.messages) ? stored.messages : [];
+    const restored: Message[] = list.map((message) => ({
+      ...message,
+      tools: message.tools.map((tool) => ({ ...tool, pending: false })),
+    }));
+    setMessages(restored);
+    nextId = Math.max(nextId, ...restored.map((message) => message.id + 1));
+    if (stored.session) setActiveSession(stored.session.id);
+  }, []);
+
   useEffect(() => {
     void (async () => {
       try {
-        const stored = await getChatHistory();
-        const list = Array.isArray(stored.messages) ? stored.messages : [];
-        const restored: Message[] = list.map((message) => ({
-          ...message,
-          tools: message.tools.map((tool) => ({ ...tool, pending: false })),
-        }));
-        setMessages(restored);
-        nextId = Math.max(nextId, ...restored.map((message) => message.id + 1));
+        const list = await getSessions();
+        setSessions(list.sessions);
+        setActiveSession(list.active);
+        await loadActive();
       } catch (caught) {
         toast("error", errorMessage(caught));
       } finally {
         setHistoryLoaded(true);
       }
     })();
-  }, [toast]);
+  }, [toast, loadActive]);
 
   useEffect(() => {
     if (!historyLoaded) return;
@@ -196,33 +234,68 @@ export function ChatView() {
     }
   };
 
-  const reset = async (): Promise<void> => {
+  const newSession = async (): Promise<void> => {
     try {
-      await clearChatHistory();
+      const list = await createSession();
+      setSessions(list.sessions);
+      setActiveSession(list.active);
       setMessages([]);
       nextId = 1;
-      toast("info", "已开始新对话");
+      toast("info", "已新建会话");
     } catch (caught) {
       toast("error", errorMessage(caught));
     }
   };
 
-  const send = async (override?: string): Promise<void> => {
-    const text = (override ?? input).trim();
-    if (!text || streaming) return;
+  const switchSession = async (id: string): Promise<void> => {
+    if (id === activeSession) return;
+    try {
+      const list = await activateSession(id);
+      setSessions(list.sessions);
+      setActiveSession(list.active);
+      await loadActive();
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
 
-    const userMessage: Message = { id: nextId++, role: "user", content: text, tools: [] };
-    const assistantId = nextId++;
-    const history = [...messages, userMessage].map((message) => ({ role: message.role, content: message.content }));
+  const removeSession = async (): Promise<void> => {
+    setConfirmDelete(false);
+    try {
+      const list = await deleteSession(activeSession);
+      setSessions(list.sessions);
+      setActiveSession(list.active);
+      await loadActive();
+      toast("info", "已删除会话");
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
 
-    setMessages((current) => [
-      ...current,
-      userMessage,
-      { id: assistantId, role: "assistant", content: "", tools: [] },
-    ]);
-    setInput("");
+  const openRename = (): void => {
+    const current = sessions.find((session) => session.id === activeSession);
+    setRenameValue(current?.title ?? "");
+    setRenameOpen(true);
+  };
+
+  const submitRename = async (): Promise<void> => {
+    const value = renameValue.trim();
+    if (value === "") return;
+    try {
+      const list = await renameSession(activeSession, value);
+      setSessions(list.sessions);
+      setRenameOpen(false);
+      toast("success", "已重命名");
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
+
+  const runTurn = async (
+    history: { role: "user" | "assistant"; content: string }[],
+    assistantId: number,
+  ): Promise<void> => {
     setStreaming(true);
-
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -272,6 +345,53 @@ export function ChatView() {
     }
   };
 
+  const send = async (override?: string): Promise<void> => {
+    const text = (override ?? input).trim();
+    if (!text || streaming) return;
+
+    const userMessage: Message = { id: nextId++, role: "user", content: text, tools: [] };
+    const assistantId = nextId++;
+    const history = [...messages, userMessage].map((message) => ({ role: message.role, content: message.content }));
+
+    setMessages((current) => [
+      ...current,
+      userMessage,
+      { id: assistantId, role: "assistant", content: "", tools: [] },
+    ]);
+    setInput("");
+    await runTurn(history, assistantId);
+  };
+
+  const regenerate = async (assistantId: number): Promise<void> => {
+    if (streaming) return;
+    const index = messages.findIndex((message) => message.id === assistantId);
+    if (index < 1) return;
+    const base = messages.slice(0, index);
+    const history = base.map((message) => ({ role: message.role, content: message.content }));
+    const newId = nextId++;
+    setMessages([...base, { id: newId, role: "assistant", content: "", tools: [] }]);
+    await runTurn(history, newId);
+  };
+
+  const editUser = (message: Message): void => {
+    if (streaming) return;
+    setMessages((current) => current.slice(0, current.findIndex((item) => item.id === message.id)));
+    setInput(message.content);
+  };
+
+  const exportChat = (): void => {
+    const markdown = messages
+      .map((message) => `## ${message.role === "user" ? "我" : "助手"}\n\n${message.content}`)
+      .join("\n\n");
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `myblog-chat-${new Date().toISOString().slice(0, 10)}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="chat">
       <div className="chat-head">
@@ -283,8 +403,27 @@ export function ChatView() {
           <span className="muted">{config?.configured ? config.baseURL : "在设置里填 baseURL / model / key"}</span>
         </div>
         <div className="chat-actions">
-          <button type="button" onClick={() => void reset()}>
-            新对话
+          <Select
+            value={activeSession}
+            options={sessions.map((session) => ({ value: session.id, label: session.title }))}
+            onChange={(id) => void switchSession(id)}
+            placeholder="会话"
+            action={{ label: "新建会话", icon: <IconPlus />, onSelect: () => void newSession() }}
+          />
+          <button type="button" className="icon-btn sm" onClick={openRename} title="重命名会话">
+            <IconPencil />
+          </button>
+          <button
+            type="button"
+            className="icon-btn sm"
+            onClick={() => setConfirmDelete(true)}
+            title="删除当前会话"
+            disabled={sessions.length <= 1}
+          >
+            <IconTrash />
+          </button>
+          <button type="button" onClick={exportChat} disabled={messages.length === 0}>
+            导出
           </button>
           <button type="button" onClick={() => setSettingsOpen((open) => !open)}>
             设置
@@ -296,22 +435,20 @@ export function ChatView() {
         <div className="card chat-settings">
           <label>
             服务商预设
-            <select
+            <Select
               value=""
-              onChange={(event) => {
-                const preset = PRESETS.find((item) => item.id === event.target.value);
+              placeholder="选择服务商，自动填 Base URL / Model…"
+              options={[
+                { value: "", label: "选择服务商，自动填 Base URL / Model…" },
+                ...PRESETS.map((preset) => ({ value: preset.id, label: preset.label })),
+              ]}
+              onChange={(id) => {
+                const preset = PRESETS.find((item) => item.id === id);
                 if (!preset || preset.id === "custom") return;
                 setBaseURL(preset.baseURL);
                 setModel(preset.model);
               }}
-            >
-              <option value="">选择服务商，自动填 Base URL / Model…</option>
-              {PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label>
             Base URL
@@ -343,7 +480,9 @@ export function ChatView() {
       <div className="chat-body" ref={bodyRef} onScroll={onScroll}>
         {messages.length === 0 && (
           <div className="chat-empty">
-            <div className="chat-empty-mark">✦</div>
+            <div className="chat-empty-mark">
+              <IconSpark />
+            </div>
             <p>问它「今天学什么」，它会读你的真实进度来规划；写回前会先给你看 diff。</p>
             <div className="suggestions">
               {SUGGESTIONS.map((suggestion) => (
@@ -357,27 +496,52 @@ export function ChatView() {
 
         {messages.map((message) => {
           const thinking = message.role === "assistant" && message.content === "" && message.tools.length === 0 && streaming;
+          const isLastAssistant = message.role === "assistant" && message.id === lastAssistantId;
           return (
-            <div key={message.id} className={`bubble ${message.role}`}>
-              {thinking && <Spinner label="思考中" />}
-              {message.content &&
-                (message.role === "user" ? (
-                  <div className="user-text">{message.content}</div>
-                ) : (
-                  <Markdown>{message.content}</Markdown>
-                ))}
-              {message.role === "assistant" && message.content && (
-                <div className="bubble-actions">
-                  <CopyButton text={message.content} />
-                </div>
-              )}
-              {message.tools.length > 0 && (
-                <div className="tool-list">
-                  {message.tools.map((tool, index) => (
-                    <ToolCardView key={index} tool={tool} />
+            <div key={message.id} className={`msg ${message.role}`}>
+              <div className={`bubble ${message.role}`}>
+                {thinking && <Spinner label="思考中" />}
+                {message.content &&
+                  (message.role === "user" ? (
+                    <div className="user-text">{message.content}</div>
+                  ) : (
+                    <Markdown>{message.content}</Markdown>
                   ))}
-                </div>
-              )}
+                {message.tools.length > 1 ? (
+                  <details className="tool-group" open>
+                    <summary>工具调用 {message.tools.length} 次</summary>
+                    <div className="tool-list">
+                      {message.tools.map((tool, index) => (
+                        <ToolCardView key={index} tool={tool} />
+                      ))}
+                    </div>
+                  </details>
+                ) : (
+                  message.tools.length === 1 && (
+                    <div className="tool-list">
+                      <ToolCardView tool={message.tools[0] as ToolCard} />
+                    </div>
+                  )
+                )}
+              </div>
+
+              <div className="msg-actions">
+                {message.role === "assistant" && message.content && (
+                  <>
+                    <CopyButton text={message.content} />
+                    {isLastAssistant && !streaming && (
+                      <button type="button" className="copy-btn" onClick={() => void regenerate(message.id)}>
+                        重新生成
+                      </button>
+                    )}
+                  </>
+                )}
+                {message.role === "user" && !streaming && (
+                  <button type="button" className="copy-btn" onClick={() => editUser(message)}>
+                    编辑
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -386,7 +550,7 @@ export function ChatView() {
 
       {!atBottom && (
         <button type="button" className="scroll-bottom" onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}>
-          ↓ 到底部
+          <IconArrowDown /> 到底部
         </button>
       )}
 
@@ -412,6 +576,56 @@ export function ChatView() {
           </button>
         )}
       </div>
+
+      {renameOpen && (
+        <div className="palette-overlay" onClick={() => setRenameOpen(false)}>
+          <div className="palette dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="palette-input">
+              <strong>重命名会话</strong>
+            </div>
+            <div className="dialog-body">
+              <input
+                autoFocus
+                value={renameValue}
+                onChange={(event) => setRenameValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void submitRename();
+                  if (event.key === "Escape") setRenameOpen(false);
+                }}
+              />
+              <div className="row">
+                <button type="button" className="primary" onClick={() => void submitRename()}>
+                  确定
+                </button>
+                <button type="button" onClick={() => setRenameOpen(false)}>
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="palette-overlay" onClick={() => setConfirmDelete(false)}>
+          <div className="palette dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="palette-input">
+              <strong>删除会话</strong>
+            </div>
+            <div className="dialog-body">
+              <p className="muted">删除后不可撤销，确定要删除当前会话吗？</p>
+              <div className="row">
+                <button type="button" className="primary danger" onClick={() => void removeSession()}>
+                  删除
+                </button>
+                <button type="button" onClick={() => setConfirmDelete(false)}>
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

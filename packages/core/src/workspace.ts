@@ -3,6 +3,8 @@ import path from "node:path";
 import { loadConfig, type WorkspaceConfig } from "./config.js";
 import { detectEol } from "./markdown.js";
 import { readGoals, type GoalsDoc } from "./goals.js";
+import { parseGoals } from "./goals.js";
+import { scaffoldGoals, scaffoldOverview } from "./bootstrap.js";
 import {
   addRecord,
   parseOverview,
@@ -96,6 +98,39 @@ export class Workspace {
   async readStatus(): Promise<WorkspaceStatus> {
     const [overview, goals] = await Promise.all([this.readOverview(), this.readGoals()]);
     return buildStatus(overview, goals);
+  }
+
+  async hasOverview(): Promise<boolean> {
+    return pathExists(this.overviewPath);
+  }
+
+  async hasGoals(): Promise<boolean> {
+    return pathExists(this.goalsPath);
+  }
+
+  async readStatusSafe(): Promise<{ initialized: boolean; status: WorkspaceStatus | null }> {
+    if (!(await this.hasOverview())) return { initialized: false, status: null };
+    const overview = await this.readOverview();
+    let goals: GoalsDoc;
+    try {
+      goals = await this.readGoals();
+    } catch {
+      goals = parseGoals("", this.goalsPath);
+    }
+    return { initialized: true, status: buildStatus(overview, goals) };
+  }
+
+  async initWorkspace(): Promise<{ created: string[] }> {
+    const created: string[] = [];
+    if (!(await pathExists(this.overviewPath))) {
+      await writeFile(this.overviewPath, scaffoldOverview(), "utf8");
+      created.push(this.config.overview);
+    }
+    if (!(await pathExists(this.goalsPath))) {
+      await writeFile(this.goalsPath, scaffoldGoals(), "utf8");
+      created.push(this.config.goals);
+    }
+    return { created };
   }
 
   async check(): Promise<CheckResult> {

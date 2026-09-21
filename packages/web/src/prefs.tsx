@@ -2,10 +2,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 export type ThemePref = "dark" | "light" | "system";
 export type StylePref = "native" | "product";
+export type AccentPref = "blue" | "violet" | "green" | "orange";
+export type FontPref = "sm" | "md" | "lg";
 
 export interface Prefs {
   theme: ThemePref;
   style: StylePref;
+  accent: AccentPref;
+  font: FontPref;
+  sidebarCollapsed: boolean;
   chatEnabled: boolean;
   terminalEnabled: boolean;
   liveRefresh: boolean;
@@ -17,6 +22,9 @@ export interface Prefs {
 export const DEFAULT_PREFS: Prefs = {
   theme: "system",
   style: "product",
+  accent: "blue",
+  font: "md",
+  sidebarCollapsed: false,
   chatEnabled: true,
   terminalEnabled: true,
   liveRefresh: true,
@@ -53,11 +61,13 @@ function resolveTheme(theme: ThemePref): "dark" | "light" {
   }
 }
 
-function applyAppearance(theme: ThemePref, style: StylePref): void {
+function applyAppearance(prefs: Prefs): void {
   const root = document.documentElement;
-  const resolved = resolveTheme(theme);
+  const resolved = resolveTheme(prefs.theme);
   root.dataset.theme = resolved;
-  root.dataset.style = style;
+  root.dataset.style = prefs.style;
+  root.dataset.accent = prefs.accent;
+  root.dataset.font = prefs.font;
   root.style.colorScheme = resolved;
 }
 
@@ -74,9 +84,15 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     } catch {
       // localStorage unavailable
     }
-    applyAppearance(prefs.theme, prefs.style);
+    applyAppearance(prefs);
     document.body.classList.toggle("no-anim", !prefs.animations);
     document.body.classList.toggle("compact", prefs.compact);
+    document.body.classList.toggle("sidebar-collapsed", prefs.sidebarCollapsed);
+    try {
+      window.myblog?.setTheme?.(prefs.theme);
+    } catch {
+      // not running inside the desktop shell
+    }
   }, [prefs]);
 
   useEffect(() => {
@@ -87,10 +103,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     } catch {
       return;
     }
-    const onChange = (): void => applyAppearance("system", prefs.style);
+    const onChange = (): void => applyAppearance(prefs);
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
-  }, [prefs.theme, prefs.style]);
+  }, [prefs]);
 
   const value = useMemo(() => ({ prefs, setPref }), [prefs, setPref]);
   return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;

@@ -1,4 +1,5 @@
 import type { CheckResult } from "@myblog/core";
+import { IconCheck } from "./icons.js";
 
 interface Props {
   result: CheckResult;
@@ -8,7 +9,9 @@ export function CheckView({ result }: Props) {
   if (result.issues.length === 0) {
     return (
       <section className="card empty-state">
-        <div className="empty-mark">✓</div>
+        <div className="empty-mark">
+          <IconCheck />
+        </div>
         <h2>一切正常</h2>
         <p className="muted">G 编号、链接、日期目录、根目录附件都没有问题。</p>
       </section>

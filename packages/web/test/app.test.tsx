@@ -33,6 +33,7 @@ const today = {
   lastDate: "2026-09-17",
   lastNext: "1. 起 server",
   lastSkills: ["G2"],
+  missing: [],
 };
 
 const check = { ok: true, issues: [] };
@@ -109,7 +110,7 @@ describe("App", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("今天该干什么");
+    expect(container.textContent).toContain("今日学习");
     expect(container.querySelector("strong")).not.toBeNull();
 
     await act(async () => {

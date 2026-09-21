@@ -15,6 +15,13 @@ declare global {
     myblog?: {
       desktop?: boolean;
       pickDirectory?: () => Promise<string | null>;
+      setTheme?: (theme: "dark" | "light" | "system") => void;
+      windowControls?: {
+        minimize: () => void;
+        toggleMaximize: () => void;
+        close: () => void;
+        onMaximized: (listener: (maximized: boolean) => void) => void;
+      };
       terminal?: MyBlogTerminalApi;
     };
   }

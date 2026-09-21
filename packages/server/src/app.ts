@@ -9,6 +9,7 @@ export interface AppOptions {
   token?: string;
   agentConfigPath?: string;
   historyDir?: string;
+  workspaces?: string[];
 }
 
 export function createApp(options: AppOptions): Hono {
@@ -25,6 +26,7 @@ export function createApp(options: AppOptions): Hono {
       token: options.token,
       agentConfigPath: options.agentConfigPath,
       historyDir: options.historyDir,
+      workspaces: options.workspaces,
     }),
   );
   app.all("/api/*", (c) => c.json({ error: "接口不存在" }, 404));

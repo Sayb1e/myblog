@@ -1,7 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { errorMessage, getStorage, saveStorage, type StorageView } from "../api.js";
 import { useToast } from "../hooks/useToasts.js";
-import { usePrefs, type Prefs, type StylePref, type ThemePref } from "../prefs.js";
+import { usePrefs, type AccentPref, type FontPref, type Prefs, type StylePref, type ThemePref } from "../prefs.js";
+import { IconFolder, IconInfo, IconMoon, IconSettings, IconSliders, IconSun } from "./icons.js";
+
+function SystemIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="#ffffff" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M12 3a9 9 0 0 0 0 18z" fill="#11151c" />
+    </svg>
+  );
+}
 
 interface Props {
   root: string;
@@ -10,14 +20,20 @@ interface Props {
 
 type CategoryId = "ui" | "features" | "storage" | "about";
 
-const CATEGORIES: { id: CategoryId; label: string; icon: string }[] = [
-  { id: "ui", label: "界面", icon: "◨" },
-  { id: "features", label: "功能", icon: "⚙" },
-  { id: "storage", label: "存储", icon: "▤" },
-  { id: "about", label: "关于", icon: "ⓘ" },
+const CATEGORIES: { id: CategoryId; label: string; icon: ReactNode }[] = [
+  { id: "ui", label: "界面", icon: <IconSliders /> },
+  { id: "features", label: "功能", icon: <IconSettings /> },
+  { id: "storage", label: "存储", icon: <IconFolder /> },
+  { id: "about", label: "关于", icon: <IconInfo /> },
 ];
 
 type BooleanPrefKey = { [K in keyof Prefs]: Prefs[K] extends boolean ? K : never }[keyof Prefs];
+
+const FONT_OPTIONS: { id: FontPref; label: string }[] = [
+  { id: "sm", label: "小" },
+  { id: "md", label: "中" },
+  { id: "lg", label: "大" },
+];
 
 function Toggle({ prefKey, label, hint }: { prefKey: BooleanPrefKey; label: string; hint: string }) {
   const { prefs, setPref } = usePrefs();
@@ -104,10 +120,10 @@ export function SettingsView({ root, version }: Props) {
               <div className="theme-picker">
                 {(
                   [
-                    { id: "system", label: "跟随系统" },
-                    { id: "dark", label: "深色" },
-                    { id: "light", label: "浅色" },
-                  ] as { id: ThemePref; label: string }[]
+                    { id: "system", label: "跟随系统", icon: <SystemIcon /> },
+                    { id: "dark", label: "深色", icon: <IconMoon /> },
+                    { id: "light", label: "浅色", icon: <IconSun /> },
+                  ] as { id: ThemePref; label: string; icon: ReturnType<typeof IconSun> }[]
                 ).map((option) => (
                   <button
                     key={option.id}
@@ -115,17 +131,65 @@ export function SettingsView({ root, version }: Props) {
                     className={`theme-tile${prefs.theme === option.id ? " active" : ""}`}
                     onClick={() => setPref("theme", option.id)}
                   >
-                    <span className={`theme-preview ${option.id}`} aria-hidden="true">
-                      <span className="tp-side" />
-                      <span className="tp-main">
-                        <span className="tp-line" />
-                        <span className="tp-line short" />
-                        <span className="tp-accent" />
-                      </span>
+                    <span className={`theme-icon theme-${option.id}`} aria-hidden="true">
+                      {option.icon}
                     </span>
                     <span className="theme-tile-label">{option.label}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="setting-field">
+              <strong>强调色</strong>
+              <div className="accent-picker">
+                {(
+                  [
+                    { id: "blue", label: "蓝" },
+                    { id: "violet", label: "紫" },
+                    { id: "green", label: "绿" },
+                    { id: "orange", label: "橙" },
+                  ] as { id: AccentPref; label: string }[]
+                ).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`accent-dot accent-${option.id}${prefs.accent === option.id ? " active" : ""}`}
+                    onClick={() => setPref("accent", option.id)}
+                    title={option.label}
+                    aria-label={option.label}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="setting-field">
+              <strong>字号</strong>
+              <div className="font-slider">
+                <input
+                  type="range"
+                  min={0}
+                  max={FONT_OPTIONS.length - 1}
+                  step={1}
+                  value={Math.max(0, FONT_OPTIONS.findIndex((option) => option.id === prefs.font))}
+                  aria-label="字号"
+                  onChange={(event) => {
+                    const option = FONT_OPTIONS[Number(event.target.value)];
+                    if (option) setPref("font", option.id);
+                  }}
+                />
+                <div className="font-ticks">
+                  {FONT_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={prefs.font === option.id ? "active" : ""}
+                      onClick={() => setPref("font", option.id)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="setting-field">
@@ -143,11 +207,20 @@ export function SettingsView({ root, version }: Props) {
                     className={`theme-tile${prefs.style === option.id ? " active" : ""}`}
                     onClick={() => setPref("style", option.id)}
                   >
-                    <span className={`style-preview ${option.id}`} aria-hidden="true">
-                      <span className="sp-side" />
-                      <span className="sp-main">
-                        <span className="sp-line" />
-                        <span className="sp-line short" />
+                    <span className={`thumb style-${option.id}`} aria-hidden="true">
+                      <span className="thumb-top">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                      <span className="thumb-body">
+                        <span className="thumb-side" />
+                        <span className="thumb-content">
+                          <span className="thumb-line w70" />
+                          <span className="thumb-line w95" />
+                          <span className="thumb-line w50" />
+                          <span className="thumb-btn" />
+                        </span>
                       </span>
                     </span>
                     <span className="theme-tile-label">{option.label}</span>
@@ -167,21 +240,9 @@ export function SettingsView({ root, version }: Props) {
             <div className="card-head">
               <h2>功能</h2>
             </div>
-            <Toggle
-              prefKey="chatEnabled"
-              label="内置对话"
-              hint="关闭后隐藏「对话」入口，也不再加载模型配置与历史；仍可用「终端」里的 opencode / claude / codex。"
-            />
-            <Toggle
-              prefKey="terminalEnabled"
-              label="终端入口"
-              hint="显示「终端」页（仅桌面端可用）；关闭则隐藏入口。"
-            />
-            <Toggle
-              prefKey="liveRefresh"
-              label="实时同步"
-              hint="监听工作区文件变化并自动刷新界面；关闭后只能手动刷新。"
-            />
+            <Toggle prefKey="chatEnabled" label="内置对话" hint="在应用内用自己的模型对话与规划" />
+            <Toggle prefKey="terminalEnabled" label="终端入口" hint="显示内嵌终端页面，原生调用" />
+            <Toggle prefKey="liveRefresh" label="实时同步" hint="监听工作区文件变化并自动刷新" />
           </>
         )}
 

@@ -5,7 +5,6 @@ import { registerContext } from "./commands/context.js";
 import { registerInit } from "./commands/init.js";
 import { registerMcp } from "./commands/mcp.js";
 import { registerScaffold } from "./commands/scaffold.js";
-import { registerServe } from "./commands/serve.js";
 import { registerStatus } from "./commands/status.js";
 import { registerToday } from "./commands/today.js";
 import { VERSION } from "./version.js";
@@ -25,7 +24,6 @@ export async function run(argv: string[]): Promise<void> {
   registerScaffold(program);
   registerClose(program);
   registerCheck(program);
-  registerServe(program);
   registerInit(program);
   registerMcp(program);
 

@@ -3,9 +3,9 @@
 [![CI](https://github.com/Sayb1e/myblog/actions/workflows/ci.yml/badge.svg)](https://github.com/Sayb1e/myblog/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg)](https://nodejs.org/)
-[![version](https://img.shields.io/badge/version-1.1.2-informational.svg)](./CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.1.3-informational.svg)](./CHANGELOG.md)
 
-管理「基于 markdown 的本地学习工作区」的本地 Web 应用 + CLI：解析与写回**进度总览 / 岗位能力地图 / 每日总结**，把「今天学什么、上次停在哪」变得可见、可 diff、可回滚。
+管理「基于 markdown 的本地学习工作区」的**桌面应用（Electron）+ CLI**：解析与写回**进度总览 / 岗位能力地图 / 每日总结**，把「今天学什么、上次停在哪」变得可见、可 diff、可回滚。
 
 > 本地单用户工具，不引入数据库。**markdown 是唯一数据源**，人能改、能 git。核心不调用任何 LLM：它只负责解析、生成、校验、组装上下文；「今天干什么」由你或你用的 AI agent 判断。
 
@@ -29,11 +29,10 @@ npm install
 npm run build
 ```
 
-起本地仪表盘（把下面路径换成你的学习仓）：
+起桌面应用（`npm run app` = 构建全部 + 启动 Electron；首次启动会让你选学习仓）：
 
 ```bash
-node packages/cli/dist/index.js -C "D:/path/to/learning-workspace" serve
-# 浏览器打开 http://127.0.0.1:5174
+npm run app
 ```
 
 只想要 CLI，也可以直接用：
@@ -83,8 +82,7 @@ learning-workspace/
 | `myblog close [--date] [--learned] [--next] [--did] [--dry-run]` | 把当天结论写回总览（进度 + 学习记录） |
 | `myblog check [--json] [--strict]` | 校验工作区一致性 |
 | `myblog mcp` | 以 stdio 启动 MCP server，供 AI 客户端调用 |
-| `myblog serve [-p] [--host] [--web] [--api-only]` | 起本地仪表盘 |
-| `myblog init [-a, --agent <list>] [--force]` | 写入 AI 接入模板 |
+| `myblog init [-a, --agent <list>] [--force] [--workspace]` | 写入 AI 接入模板；`--workspace` 同时初始化学习仓结构 |
 
 写回前建议先 `--dry-run` 看改动：
 
@@ -114,50 +112,43 @@ myblog init --agent opencode     # 只装 opencode
 - MCP 工具：`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`。
 - `myblog_close` **默认 `dryRun=true`**：先返回 diff 预览，用户确认后再以 `dryRun=false` 调用才落盘。
 
-## Web 仪表盘
+## 桌面应用
 
-`myblog serve` 后打开 `http://127.0.0.1:5174`：
+桌面版（Electron）内置服务与界面，双击即用：
 
 - **今日该干什么**：下次继续 + 当前活跃 G 能力。
 - **进度 / 能力地图 / 时间线**：总览与岗位目标的可视化。
-- **每日总结**：读取、编辑、保存；`新建当日总结`；`收工写回总览`（可勾选只预览）。
+- **每日总结**：读取、编辑、分栏、预览；`新建当日总结`；`收工写回总览`（可勾选只预览）。
 - **校验**：断链、未定义 G、缺总结、根目录附件。
+- **多工作区**：顶栏切换；`添加工作区` 选目录（切换仅限白名单）。
+- **命令面板** `Ctrl/Cmd+K`、快捷键帮助 `?`。
+
+空文件夹也能用：缺少 `学习进度总览.md` 时显示引导卡，可**一键初始化**生成最小结构。
 
 ### 内置对话（用自己的模型）
 
-Web 与桌面端都有「对话」页：填入自己的模型即可像聊天一样规划学习。
+填入自己的模型即可像聊天一样规划学习（OpenAI 兼容：OpenAI、DeepSeek、通义、Kimi、OpenRouter、Ollama 等）；也可在「设置 → 存储」自定义模型配置文件与对话历史的存放位置。
 
-- 支持 **OpenAI 兼容**接口（OpenAI、DeepSeek、通义、Kimi、OpenRouter、Ollama 等）：填 `baseURL` + `model` + `apiKey`。
-- Key 存在本地（服务端为 `~/.myblog/agent.json`，桌面端为应用数据目录），**不会下发到页面**；也可用 `MYBLOG_AGENT_BASE_URL` / `MYBLOG_AGENT_API_KEY` / `MYBLOG_AGENT_MODEL` 覆盖。
-- 每次对话自动注入当前工作区上下文，并提供工具：`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`。
+- Key 只存本地（应用数据目录），**不会下发到界面**；也可用 `MYBLOG_AGENT_BASE_URL` / `MYBLOG_AGENT_API_KEY` / `MYBLOG_AGENT_MODEL` 覆盖。
+- 内置工具：`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`。
 - **写回安全**：`myblog_close` 默认 `dryRun=true`，先在对话里出 diff 卡片，你同意后模型才会以 `dryRun=false` 落盘。
 
-### 终端（桌面端）
+### 终端
 
-桌面版内置一个**真终端**（xterm.js + node-pty / ConPTY，winpty 后端），工作目录就是当前学习库：
+内置一个**真终端**（xterm.js + node-pty，winpty 后端），工作目录就是当前学习库：
 
-- 可直接运行 `opencode`、`claude`、`codex`、`myblog`、git 或任意命令——**任何 CLI 都能在这里用**。
-- 终端只在桌面端出现；浏览器模式不显示该入口。
-
-### 远程访问（默认关闭）
-
-本地写 API 默认无鉴权，因此 `serve` **默认只绑 `127.0.0.1`**。确需局域网访问时：
-
-```bash
-myblog serve --host 0.0.0.0 --allow-remote --token <your-token>
-```
-
-启用后所有写接口都要求 `x-myblog-token`（或 `Authorization: Bearer`）。Web UI 会在需要时提示输入并记住。
+- 可直接运行 `opencode`、`claude`、`codex`、`myblog`、git 或任意命令。
+- 切换页面不会中断会话。
 
 ## 架构
 
 ```
 @myblog/core     解析 / 生成 / 校验 / 组装（唯一引擎，无 LLM、无 DB）
 @myblog/agent    OpenAI 兼容模型客户端 + 工具调用循环（唯一持 key 的地方）
-   ├── @myblog/cli      status / today / context / scaffold / close / check / serve / init / mcp
-   ├── @myblog/server   Hono：/api/*（含 /api/chat SSE）+ 伺服 Web 静态资源
-   ├── @myblog/web      Vite + React 仪表盘（含对话页）
-   └── @myblog/desktop  Electron 薄壳（内置 server，无终端）
+   ├── @myblog/cli      status / today / context / scaffold / close / check / init / mcp
+   ├── @myblog/server   Hono：/api/*（含 /api/chat SSE），桌面端内置使用
+   ├── @myblog/web      Vite + React 界面（由桌面端加载）
+   └── @myblog/desktop  Electron：内置 server + 真终端
 ```
 
 设计原则：
@@ -179,7 +170,7 @@ npm test                 # vitest 单测
 
 - core 的 fixture 在 `packages/core/test/fixtures/`（结构复刻真实工作区，内容脱敏）。
 - 用真实工作区跑只读字节级测试：`MYBLOG_REAL_ROOT=/path/to/workspace npm test`。
-- 前端开发：终端 A `node packages/cli/dist/index.js serve --api-only`，终端 B `npm run dev --workspace @myblog/web`（Vite 代理 `/api`）。
+- 桌面开发：`npm run app`（构建全部并启动 Electron）；只改界面时 `npm run desktop`（需先 build 过 web）。
 
 ## 截图
 

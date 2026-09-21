@@ -13,6 +13,7 @@ const TOKEN_KEY = "myblog-token";
 export interface StatusResponse extends WorkspaceStatus {
   root: string;
   version: string;
+  initialized: boolean;
 }
 
 function tokenHeaders(): Record<string, string> {
@@ -101,6 +102,21 @@ export const getStorage = (): Promise<StorageView> => request("/api/storage");
 export const saveStorage = (patch: { agentConfigPath?: string; historyDir?: string }): Promise<StorageView> =>
   request("/api/storage", { method: "PUT", ...json(patch) });
 
+export interface WorkspaceList {
+  active: string;
+  list: string[];
+}
+
+export const getWorkspaces = (): Promise<WorkspaceList> => request("/api/workspaces");
+
+export const switchWorkspace = (path: string): Promise<WorkspaceList> =>
+  request("/api/workspace", { method: "POST", ...json({ path }) });
+
+export const addWorkspace = (path: string): Promise<WorkspaceList> =>
+  request("/api/workspaces", { method: "POST", ...json({ path }) });
+
+export const initWorkspace = (): Promise<{ created: string[] }> => request("/api/init", { method: "POST" });
+
 export type ChatEvent =
   | { type: "text"; text: string }
   | { type: "tool_start"; name: string; args: string }
@@ -133,7 +149,34 @@ function trimHistory(messages: ChatMessageRecord[]): ChatMessageRecord[] {
   }));
 }
 
-export const getChatHistory = (): Promise<{ messages: ChatMessageRecord[] }> => request("/api/chat/history");
+export interface SessionMeta {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionList {
+  active: string;
+  sessions: SessionMeta[];
+}
+
+export const getSessions = (): Promise<SessionList> => request("/api/chat/sessions");
+
+export const createSession = (title?: string): Promise<SessionList & { session: SessionMeta }> =>
+  request("/api/chat/sessions", { method: "POST", ...json({ title }) });
+
+export const activateSession = (id: string): Promise<SessionList> =>
+  request(`/api/chat/sessions/${id}/activate`, { method: "POST" });
+
+export const renameSession = (id: string, title: string): Promise<SessionList> =>
+  request(`/api/chat/sessions/${id}`, { method: "PATCH", ...json({ title }) });
+
+export const deleteSession = (id: string): Promise<SessionList> =>
+  request(`/api/chat/sessions/${id}`, { method: "DELETE" });
+
+export const getChatHistory = (): Promise<{ session: SessionMeta | null; messages: ChatMessageRecord[] }> =>
+  request("/api/chat/history");
 
 export const saveChatHistory = (messages: ChatMessageRecord[]): Promise<{ ok: boolean }> =>
   request("/api/chat/history", { method: "PUT", ...json({ messages: trimHistory(messages) }) });

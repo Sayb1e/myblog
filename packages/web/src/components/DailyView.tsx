@@ -3,6 +3,7 @@ import type { CloseDayInput, CloseDayResult, SummaryDoc } from "@myblog/core";
 import { closeDay, errorMessage, getSummary, saveSummary, scaffoldDay } from "../api.js";
 import { useToast } from "../hooks/useToasts.js";
 import { revealStyle } from "../reveal.js";
+import { DatePicker } from "./DatePicker.js";
 import { Markdown } from "./Markdown.js";
 
 interface Props {
@@ -25,7 +26,7 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
   const [did, setDid] = useState("");
   const [dryRun, setDryRun] = useState(true);
   const [closePreview, setClosePreview] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
+  const [mode, setMode] = useState<"edit" | "split" | "preview">("edit");
 
   const load = useCallback(
     async (target: string) => {
@@ -97,32 +98,42 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
 
   const current = summaries.find((summary) => summary.date === date);
 
+  const dateGroups: { month: string; items: { summary: SummaryDoc; index: number }[] }[] = [];
+  summaries.forEach((summary, index) => {
+    const month = summary.date.slice(0, 7);
+    const last = dateGroups[dateGroups.length - 1];
+    if (last && last.month === month) last.items.push({ summary, index });
+    else dateGroups.push({ month, items: [{ summary, index }] });
+  });
+
   return (
     <div className="daily">
-      <aside className="date-list">
+      <aside className="date-side">
         <div className="date-list-head">
           <h2>日期</h2>
-          <input
-            type="date"
-            value={date}
-            onChange={(event) => onSelectDate(event.target.value)}
-            className="date-picker"
-          />
+          <DatePicker value={date} onChange={onSelectDate} />
         </div>
-        {summaries.map((summary, index) => (
-          <button
-            key={summary.date}
-            type="button"
-            className={`date-item reveal${summary.date === date ? " active" : ""}`}
-            style={revealStyle(index)}
-            onClick={() => onSelectDate(summary.date)}
-          >
-            <span className="date-num">{summary.date}</span>
-            {summary.skills.length > 0 && <span className="date-skills">{summary.skills.join(" ")}</span>}
-            <span className="date-preview">{summary.preview.split("\n")[0]}</span>
-          </button>
+        <div className="date-list">
+        {dateGroups.map((group) => (
+          <div key={group.month} className="date-group">
+            <span className="date-month">{group.month}</span>
+            {group.items.map(({ summary, index }) => (
+              <button
+                key={summary.date}
+                type="button"
+                className={`date-item reveal${summary.date === date ? " active" : ""}`}
+                style={revealStyle(index)}
+                onClick={() => onSelectDate(summary.date)}
+              >
+                <span className="date-num">{summary.date.slice(5)}</span>
+                {summary.skills.length > 0 && <span className="date-skills">{summary.skills.join(" ")}</span>}
+                <span className="date-preview">{summary.preview.split("\n")[0]}</span>
+              </button>
+            ))}
+          </div>
         ))}
         {summaries.length === 0 && <p className="muted">还没有任何总结。</p>}
+        </div>
       </aside>
 
       <section className="card editor">
@@ -140,33 +151,44 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
         ) : (
           <>
             <div className="editor-toolbar">
-              <button
-                type="button"
-                className={showPreview ? "" : "active"}
-                onClick={() => setShowPreview(false)}
-              >
-                编辑
-              </button>
-              <button type="button" className={showPreview ? "active" : ""} onClick={() => setShowPreview(true)}>
-                预览
-              </button>
-            </div>
-            {showPreview ? (
-              <div className="markdown-preview">
-                <Markdown>{content}</Markdown>
+              <div className="seg">
+                {(
+                  [
+                    { id: "edit", label: "编辑" },
+                    { id: "split", label: "分栏" },
+                    { id: "preview", label: "预览" },
+                  ] as { id: "edit" | "split" | "preview"; label: string }[]
+                ).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`seg-item${mode === option.id ? " active" : ""}`}
+                    onClick={() => setMode(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <textarea
-                className="editor-area"
-                value={content}
-                spellCheck={false}
-                placeholder={exists ? "" : "这一天还没有总结，点「新建当日总结」生成骨架，或直接在这里写。"}
-                onChange={(event) => {
-                  setContent(event.target.value);
-                  setDirty(true);
-                }}
-              />
-            )}
+            </div>
+            <div className={`editor-panes mode-${mode}`}>
+              {mode !== "preview" && (
+                <textarea
+                  className="editor-area"
+                  value={content}
+                  spellCheck={false}
+                  placeholder={exists ? "" : "这一天还没有总结，点「新建当日总结」生成骨架，或直接在这里写。"}
+                  onChange={(event) => {
+                    setContent(event.target.value);
+                    setDirty(true);
+                  }}
+                />
+              )}
+              {mode !== "edit" && (
+                <div className="markdown-preview">
+                  <Markdown>{content}</Markdown>
+                </div>
+              )}
+            </div>
           </>
         )}
 

@@ -15,7 +15,8 @@ const SYSTEM_PROMPT = `你是 MyBlog 的学习助手，管理一个基于 markdo
 2. 规划当天任务时，把「下次从哪继续」与当前阶段 G 能力取交集，给出 1-3 条具体动作，每条附验证方式；不要提前开后面的阶段。
 3. 当前工作区上下文已直接给你（系统消息里的 JSON）。除非确需某天历史总结（myblog_read_summary）、用户明确要求校验（myblog_check），否则不要重复调用 myblog_context / myblog_check，避免无谓的工具调用。
 4. 任何写操作都要先征得用户同意：先用 myblog_close（默认 dryRun=true）或 myblog_scaffold，把 diff / 结果给用户看；用户明确同意后才用 dryRun:false 落盘。
-5. 只改动与今天相关的内容，外科手术式写回，不要整篇重写。`;
+5. 需要读写工作区里的普通文件（脚本、代码、笔记等）时用 fs_list / fs_read / fs_write。路径一律用相对工作区根目录的相对路径，不要用绝对路径。写文件同样先以 fs_write（默认 dryRun=true）出 diff 给用户确认，用户同意后才传 dryRun:false；不要声称自己没有写文件权限。
+6. 只改动与今天相关的内容，外科手术式写回，不要整篇重写。`;
 
 export interface AgentMessage {
   role: "user" | "assistant";
