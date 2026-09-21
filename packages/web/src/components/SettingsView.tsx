@@ -128,20 +128,34 @@ export function SettingsView({ root, version }: Props) {
                 ))}
               </div>
             </div>
-            <label className="setting-row">
-              <span>
-                <strong>界面风格</strong>
-                <p className="muted">产品风：渐变光晕、玻璃卡片、大标题、留白更松；原生风：紧凑的工具型外观。</p>
-              </span>
-              <select
-                className="setting-select"
-                value={prefs.style}
-                onChange={(event) => setPref("style", event.target.value as StylePref)}
-              >
-                <option value="product">产品</option>
-                <option value="native">原生</option>
-              </select>
-            </label>
+            <div className="setting-field">
+              <strong>界面风格</strong>
+              <div className="theme-picker">
+                {(
+                  [
+                    { id: "product", label: "产品" },
+                    { id: "native", label: "原生" },
+                  ] as { id: StylePref; label: string }[]
+                ).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`theme-tile${prefs.style === option.id ? " active" : ""}`}
+                    onClick={() => setPref("style", option.id)}
+                  >
+                    <span className={`style-preview ${option.id}`} aria-hidden="true">
+                      <span className="sp-side" />
+                      <span className="sp-main">
+                        <span className="sp-line" />
+                        <span className="sp-line short" />
+                      </span>
+                    </span>
+                    <span className="theme-tile-label">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="muted">产品风：渐变光晕、玻璃卡片、大标题、留白更松；原生风：紧凑的工具型外观。</p>
+            </div>
             <Toggle prefKey="animations" label="动画效果" hint="思考中的 spinner 与界面过渡动画；关闭后更省电、更安静。" />
             <Toggle prefKey="codeHighlight" label="代码高亮" hint="对话里的代码块语法着色；关闭后以纯文本代码块显示。" />
             <Toggle prefKey="compact" label="紧凑模式" hint="减小间距与留白，一屏看到更多内容。" />

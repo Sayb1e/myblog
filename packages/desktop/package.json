@@ -1,6 +1,6 @@
 {
   "name": "@myblog/desktop",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "Desktop shell for MyBlog (Electron).",
   "type": "module",

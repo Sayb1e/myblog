@@ -1287,10 +1287,33 @@ button.ghost {
 }
 
 .chat-settings select {
-  padding: 9px 11px;
+  appearance: none;
+  padding: 9px 34px 9px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--input-bg);
+  background-color: var(--input-bg);
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: right 16px center, right 11px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+
+.chat-settings select:hover {
+  border-color: var(--border-hover);
+}
+
+.chat-settings select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.chat-settings select option {
+  background: var(--panel);
   color: var(--text);
 }
 
@@ -1310,9 +1333,9 @@ button.ghost {
 }
 
 .bubble {
-  max-width: 100%;
+  max-width: 92%;
   padding: 13px 16px;
-  border-radius: 15px;
+  border-radius: var(--radius);
   line-height: 1.68;
 }
 
@@ -1321,16 +1344,13 @@ button.ghost {
   max-width: 82%;
   background: linear-gradient(135deg, var(--accent), #6f7dff);
   color: #fff;
-  border-bottom-right-radius: 5px;
   box-shadow: 0 8px 20px rgba(91, 140, 255, 0.24);
 }
 
 .bubble.assistant {
   align-self: flex-start;
-  width: 100%;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-bottom-left-radius: 5px;
 }
 
 .user-text {
@@ -1479,36 +1499,60 @@ button.ghost {
   min-width: 0;
 }
 
-.setting-select {
-  flex: none;
-  padding: 8px 34px 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background-color: var(--input-bg);
-  color: var(--text);
-  appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position: right 16px center, right 11px center;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-  cursor: pointer;
-  transition: border-color 0.16s, box-shadow 0.16s;
+.style-preview {
+  display: flex;
+  width: 100%;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(127, 127, 127, 0.3);
 }
 
-.setting-select:hover {
-  border-color: var(--border-hover);
+.style-preview .sp-side {
+  width: 28%;
 }
 
-.setting-select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+.style-preview .sp-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px;
 }
 
-.setting-select option {
-  background: var(--panel);
-  color: var(--text);
+.style-preview .sp-line {
+  height: 5px;
+  border-radius: 3px;
+}
+
+.style-preview .sp-line.short {
+  width: 55%;
+}
+
+.style-preview.product {
+  border-radius: 13px;
+  background: linear-gradient(135deg, rgba(91, 140, 255, 0.35), rgba(154, 123, 255, 0.2) 60%, #0f131b);
+}
+
+.style-preview.product .sp-side {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.style-preview.product .sp-line {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.style-preview.native {
+  background: #12161f;
+}
+
+.style-preview.native .sp-side {
+  background: #1b212c;
+}
+
+.style-preview.native .sp-line {
+  background: #2b3446;
+  border-radius: 2px;
 }
 
 .switch {
