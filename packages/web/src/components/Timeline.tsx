@@ -1,4 +1,5 @@
 import type { LearningRecord } from "@myblog/core";
+import { revealStyle } from "../reveal.js";
 import { Markdown } from "./Markdown.js";
 
 interface Props {
@@ -22,7 +23,7 @@ export function Timeline({ records, skillsByDate, skill, onOpen }: Props) {
 
       <ol className="timeline">
         {visible.map((record, index) => (
-          <li key={`${record.date}-${index}`}>
+          <li key={`${record.date}-${index}`} className="reveal" style={revealStyle(index)}>
             <div
               className="tl-row"
               role="button"

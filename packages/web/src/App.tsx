@@ -9,6 +9,7 @@ import { MarkdownProvider } from "./components/Markdown.js";
 import { ProgressCard } from "./components/ProgressCard.js";
 import { SettingsView } from "./components/SettingsView.js";
 import { Sidebar } from "./components/Sidebar.js";
+import { SkeletonCard } from "./components/Skeleton.js";
 import { Timeline } from "./components/Timeline.js";
 import { TodayCard } from "./components/TodayCard.js";
 import { useToast } from "./hooks/useToasts.js";
@@ -105,6 +106,13 @@ export function App() {
         <div className={viewClass("overview")}>
           <MarkdownProvider openDate={openDate}>
             <div className="overview">
+              {!status && loading && (
+                <div className="grid">
+                  <SkeletonCard lines={4} />
+                  <SkeletonCard lines={6} />
+                  <SkeletonCard lines={5} />
+                </div>
+              )}
               {today && <TodayCard plan={today} onOpenDate={openDate} />}
               <div className="grid">
                 {status && <ProgressCard progress={status.progress} onSave={saveProgress} />}

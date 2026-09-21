@@ -99,21 +99,35 @@ export function SettingsView({ root, version }: Props) {
             <div className="card-head">
               <h2>界面</h2>
             </div>
-            <label className="setting-row">
-              <span>
-                <strong>主题</strong>
-                <p className="muted">深色 / 浅色 / 跟随系统。</p>
-              </span>
-              <select
-                className="setting-select"
-                value={prefs.theme}
-                onChange={(event) => setPref("theme", event.target.value as ThemePref)}
-              >
-                <option value="system">跟随系统</option>
-                <option value="dark">深色</option>
-                <option value="light">浅色</option>
-              </select>
-            </label>
+            <div className="setting-field">
+              <strong>主题</strong>
+              <div className="theme-picker">
+                {(
+                  [
+                    { id: "system", label: "跟随系统" },
+                    { id: "dark", label: "深色" },
+                    { id: "light", label: "浅色" },
+                  ] as { id: ThemePref; label: string }[]
+                ).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`theme-tile${prefs.theme === option.id ? " active" : ""}`}
+                    onClick={() => setPref("theme", option.id)}
+                  >
+                    <span className={`theme-preview ${option.id}`} aria-hidden="true">
+                      <span className="tp-side" />
+                      <span className="tp-main">
+                        <span className="tp-line" />
+                        <span className="tp-line short" />
+                        <span className="tp-accent" />
+                      </span>
+                    </span>
+                    <span className="theme-tile-label">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <label className="setting-row">
               <span>
                 <strong>界面风格</strong>

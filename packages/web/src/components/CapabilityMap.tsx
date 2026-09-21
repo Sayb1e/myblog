@@ -1,4 +1,5 @@
 import type { CapabilityStatus } from "@myblog/core";
+import { revealStyle } from "../reveal.js";
 import { Markdown } from "./Markdown.js";
 
 interface Props {
@@ -24,11 +25,11 @@ export function CapabilityMap({ capabilities, selected, onSelect }: Props) {
       </div>
 
       <ul className="capabilities">
-        {capabilities.map((capability) => {
+        {capabilities.map((capability, index) => {
           const stage = level(capability.status);
           const isActive = selected === capability.id;
           return (
-            <li key={capability.id}>
+            <li key={capability.id} className="reveal" style={revealStyle(index)}>
               <div
                 className={`capability${isActive ? " selected" : ""}${capability.active ? " current" : ""}`}
                 role="button"

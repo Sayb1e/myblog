@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { CloseDayInput, CloseDayResult, SummaryDoc } from "@myblog/core";
 import { closeDay, errorMessage, getSummary, saveSummary, scaffoldDay } from "../api.js";
 import { useToast } from "../hooks/useToasts.js";
+import { revealStyle } from "../reveal.js";
 import { Markdown } from "./Markdown.js";
 
 interface Props {
@@ -108,11 +109,12 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
             className="date-picker"
           />
         </div>
-        {summaries.map((summary) => (
+        {summaries.map((summary, index) => (
           <button
             key={summary.date}
             type="button"
-            className={`date-item${summary.date === date ? " active" : ""}`}
+            className={`date-item reveal${summary.date === date ? " active" : ""}`}
+            style={revealStyle(index)}
             onClick={() => onSelectDate(summary.date)}
           >
             <span className="date-num">{summary.date}</span>
