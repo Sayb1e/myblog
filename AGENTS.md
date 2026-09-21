@@ -7,7 +7,7 @@ MyBlog 仓库的开发约定。给在本仓工作的 AI/人类协作者。
 ```
 packages/core      解析/生成/校验/组装（唯一引擎，无 LLM、无 DB）
 packages/agent     OpenAI 兼容模型客户端 + 工具循环（唯一持 key）
-packages/cli       myblog 命令（status/today/context/scaffold/close/check/init/mcp）
+packages/cli       myblog 命令（status/init/mcp；其余功能在桌面端）
 packages/server    Hono API + SSE（/api/chat、/api/events），桌面端内置使用
 packages/web       Vite + React 界面（由桌面端加载）
 packages/desktop   Electron：内置 server + 真终端（node-pty）

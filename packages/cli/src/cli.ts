@@ -1,12 +1,7 @@
 import { Command } from "commander";
-import { registerCheck } from "./commands/check.js";
-import { registerClose } from "./commands/close.js";
-import { registerContext } from "./commands/context.js";
 import { registerInit } from "./commands/init.js";
 import { registerMcp } from "./commands/mcp.js";
-import { registerScaffold } from "./commands/scaffold.js";
 import { registerStatus } from "./commands/status.js";
-import { registerToday } from "./commands/today.js";
 import { VERSION } from "./version.js";
 
 export async function run(argv: string[]): Promise<void> {
@@ -19,11 +14,6 @@ export async function run(argv: string[]): Promise<void> {
     .option("-C, --root <dir>", "工作区根目录", process.env.MYBLOG_ROOT ?? process.cwd());
 
   registerStatus(program);
-  registerToday(program);
-  registerContext(program);
-  registerScaffold(program);
-  registerClose(program);
-  registerCheck(program);
   registerInit(program);
   registerMcp(program);
 

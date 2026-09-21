@@ -55,6 +55,7 @@
 - **工作区切换移到侧栏「设置」上方**；「添加工作区」并入切换下拉菜单；下拉统一为自绘圆角组件（向上弹出）。
 - **规划输入补全**：缺少「岗位目标.md」时，从总览「下次从哪继续」里的 G 编号推断当前阶段；`context` 与 `/api/today` 返回 `missing`（缺哪些输入）；今日卡片给出提示与「生成岗位目标」入口。
 - **移除「浏览器打开」这条路径**：删除 CLI `myblog serve`（含 `--web / --api-only / --allow-remote / --token`），项目形态固定为**桌面应用 + CLI**；桌面端仍使用内嵌服务（内部 HTTP 为其加载界面的传输层）。README/AGENTS 同步更新。
+- **CLI 瘦身**：只保留 `myblog status` / `myblog mcp` / `myblog init`，删除 `today` / `context` / `scaffold` / `close` / `check`（这些功能都在桌面端）；agent 接入模板与 README 改为以 MCP 工具为准。
 
 ## [1.1.2] - 2026-09-21
 

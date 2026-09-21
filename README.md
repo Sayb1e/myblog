@@ -71,30 +71,21 @@ learning-workspace/
 
 ## CLI
 
+CLI 只保留桌面端替代不了的部分：**MCP 服务**、工作区初始化、状态输出。
+
 全局选项：`-C, --root <dir>`（默认 `MYBLOG_ROOT`，再默认当前目录）。
 
 | 命令 | 说明 |
 | --- | --- |
 | `myblog status [--json]` | 当前阶段、活跃能力、进度与最近记录 |
-| `myblog today [--json]` | 今日上下文：阶段、活跃能力、下次继续、最近总结 |
-| `myblog context [--json]` | **给 AI agent 的完整上下文**（状态 + 今日 + 校验 + 最近总结） |
-| `myblog scaffold [date] [--preview] [--next] [--skills]` | 生成当日 `总结.md` 骨架（不覆盖已有） |
-| `myblog close [--date] [--learned] [--next] [--did] [--dry-run]` | 把当天结论写回总览（进度 + 学习记录） |
-| `myblog check [--json] [--strict]` | 校验工作区一致性 |
 | `myblog mcp` | 以 stdio 启动 MCP server，供 AI 客户端调用 |
 | `myblog init [-a, --agent <list>] [--force] [--workspace]` | 写入 AI 接入模板；`--workspace` 同时初始化学习仓结构 |
 
-写回前建议先 `--dry-run` 看改动：
-
-```bash
-myblog close --date 2026-09-18 \
-  --learned "G2 闭环" --next "写 Frida Hook" --did "装包跑通，读到 DENIED" \
-  --dry-run
-```
+> 每日规划、收工写回、校验这些都在**桌面端应用**里做（阶段 / 能力地图 / 时间线 / 对话 / 终端）。
 
 ## 接入 AI agent
 
-MyBlog 与 agent 无关：**契约是 `myblog context --json`**。各家的命令 / skill 只是薄壳，由 `init` 生成：
+MyBlog 与 agent 无关：**契约是 MCP 工具**（`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`）与 `myblog status --json`。各家的命令 / skill 只是薄壳，由 `init` 生成：
 
 ```bash
 myblog init --agent all          # opencode + claude + cursor + AGENTS.md
@@ -109,7 +100,7 @@ myblog init --agent opencode     # 只装 opencode
 | 通用 | `AGENTS.md` 里的托管块（`<!-- myblog:start --> … <!-- myblog:end -->`，不改动你已有内容） |
 
 - 重复执行幂等；已有文件默认跳过，`--force` 覆盖；`.opencode/opencode.json` 与 `AGENTS.md` 只做合并/原地更新，不动你已有配置。
-- MCP 工具：`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`。
+- MCP 工具：`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`；桌面端的对话窗口另有 `fs_list` / `fs_read` / `fs_write` 用于读写工作区普通文件。
 - `myblog_close` **默认 `dryRun=true`**：先返回 diff 预览，用户确认后再以 `dryRun=false` 调用才落盘。
 
 ## 桌面应用
