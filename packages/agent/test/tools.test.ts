@@ -66,8 +66,9 @@ describe("fs_write", () => {
 
   it("拒绝越界路径", async () => {
     const workspace = await makeWorkspace();
+    const absolutePath = process.platform === "win32" ? "C:/evil.txt" : "/etc/evil.txt";
     const escaped = (await executeTool(workspace, "fs_write", { path: "../evil.txt", content: "x" })) as { error?: string };
-    const absolute = (await executeTool(workspace, "fs_write", { path: "C:/evil.txt", content: "x" })) as { error?: string };
+    const absolute = (await executeTool(workspace, "fs_write", { path: absolutePath, content: "x" })) as { error?: string };
 
     expect(escaped.error).toContain("超出工作区");
     expect(absolute.error).toBeTruthy();
