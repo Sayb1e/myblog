@@ -15,9 +15,9 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| `MyBlog.1.2.0.exe` | **免安装单文件**（portable）。双击即用，卸载 = 删掉这个文件 |
-| `MyBlog.Setup.1.2.0.exe` | 安装版（NSIS）：可选安装目录、建桌面/开始菜单快捷方式、带卸载项 |
-| `SHA256SUMS.txt` | 校验和（`certutil -hashfile MyBlog.1.2.0.exe SHA256` 对一下） |
+| `MyBlog_v1.2.0_setup.exe` | **安装版**（NSIS，推荐）：可选安装目录、建桌面/开始菜单快捷方式、带卸载项；装到用户目录，不需要管理员权限 |
+| `MyBlog_v1.2.0_portable.exe` | **免安装单文件**：双击即用，卸载 = 删掉这个文件（适合放 U 盘 / 临时用） |
+| `SHA256SUMS.txt` | 校验和（`certutil -hashfile MyBlog_v1.2.0_setup.exe SHA256` 对一下） |
 
 - **系统要求**：Windows 10 / 11（x64）。
 - **首次运行**：会被 Windows SmartScreen 拦一次（exe 未做代码签名）→「更多信息」→「仍要运行」。

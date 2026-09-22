@@ -49,10 +49,10 @@
       ]
     },
     "portable": {
-      "artifactName": "${productName}.${version}.exe"
+      "artifactName": "${productName}_v${version}_portable.${ext}"
     },
     "nsis": {
-      "artifactName": "${productName}.Setup.${version}.${ext}",
+      "artifactName": "${productName}_v${version}_setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
