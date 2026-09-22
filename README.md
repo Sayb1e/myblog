@@ -195,7 +195,11 @@ exe 未做代码签名。用 Release 里的 `SHA256SUMS.txt` 校验来源，或�
 
 ## 截图
 
-> 待补：仪表盘总览、能力地图、每日总结编辑器。放到 `docs/` 并在本段引用。
+| 概览：今日学习 · 进度 · 能力地图 · 时间线 · 版本 | 每日总结：编辑 / 分栏 / 预览（左右联动滚动） |
+| --- | --- |
+| <img src="docs/overview.png" width="470" alt="概览：今日学习、进度、能力地图、时间线、版本卡片"> | <img src="docs/daily-split.png" width="470" alt="每日总结：编辑、分栏、预览三模式"> |
+
+> 素材放 `docs/`，规范见 [`docs/README.md`](docs/README.md)（尺寸 1600px、单图 ≤500KB、GIF ≤5MB）。待补：文件预览、对话写回 diff、命令面板搜索、主题 / 强调色。
 
 ## License
 
