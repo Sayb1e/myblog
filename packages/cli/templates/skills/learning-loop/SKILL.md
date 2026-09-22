@@ -1,6 +1,6 @@
 ---
 name: learning-loop
-description: Use when working in a markdown learning workspace managed by MyBlog (files like 学习进度总览.md, 岗位目标.md, YYYY-MM-DD/总结.md, or myblog.config.json). Triggers on "今天学什么", "今天该干什么", "下次从哪继续", "上次停在哪", "收工", "写总结", "学习进度", "G 阶段/G 编号". Use ONLY for managing that workspace; not for general coding.
+description: Use when working in a markdown learning workspace managed by MyBlog (files like PROGRESS.md, GOALS.md, YYYY-MM-DD/总结.md, or myblog.config.json). Triggers on "今天学什么", "今天该干什么", "下次从哪继续", "上次停在哪", "收工", "写总结", "学习进度", "G 阶段/G 编号". Use ONLY for managing that workspace; not for general coding.
 ---
 
 # Learning loop
@@ -9,7 +9,7 @@ MyBlog 管理一个「人可改、可 git」的 markdown 学习仓。markdown �
 
 ## 先确认工作区
 
-仓库根目录应存在 `学习进度总览.md` 与 `岗位目标.md`（名称可用 `myblog.config.json` 覆盖）。找不齐就先问用户工作区路径，别猜。
+仓库根目录应存在 `PROGRESS.md`（必需）与 `GOALS.md`（可选，能力地图来源；名称都可用 `myblog.config.json` 覆盖）。PROGRESS.md 找不齐就先问用户工作区路径，别猜。
 
 ## 入口
 
@@ -38,5 +38,5 @@ fs_list/fs_read/fs_write  # 工作区内的普通文件
 
 - 写回只替换目标段落或表格行，绝不整篇重新序列化（否则 diff 与中文表格会乱）。
 - 所有写操作幂等、可 diff；重复执行不应产生重复记录。
-- 不修改与被今天无关的内容；不把 `岗位目标.md` 抄进每日总结。
+- 不修改与被今天无关的内容；不把 `GOALS.md` 抄进每日总结。
 - 每日总结是细节唯一来源；总览只放「学到哪了 / 下次从哪继续 / 最近一次 / 学习记录」。

@@ -264,3 +264,48 @@ export function IconPencil(props: IconProps) {
     </Base>
   );
 }
+
+export function IconFile(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M7 3h7l4 4v14H7z" />
+      <path d="M14 3v4h4" />
+    </Base>
+  );
+}
+
+export function IconFolderOpen(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M3 7h6l2 2h10v3" />
+      <path d="M3 7v12h18l1.6-7H8.4L6.6 19" />
+    </Base>
+  );
+}
+
+export function IconArrowLeft(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M15 5l-7 7 7 7" />
+    </Base>
+  );
+}
+
+export function IconWrench(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </Base>
+  );
+}
+
+export function IconGit(props: IconProps) {
+  return (
+    <Base {...props}>
+      <circle cx="6" cy="6" r="2.4" />
+      <circle cx="6" cy="18" r="2.4" />
+      <circle cx="18" cy="8" r="2.4" />
+      <path d="M6 8.4v7.2M18 10.4c0 3-2.4 4.2-5.4 4.2H8.2" />
+    </Base>
+  );
+}

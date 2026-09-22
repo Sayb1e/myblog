@@ -7,7 +7,7 @@ import {
 } from "../src/markdown.js";
 import { readFixture } from "./helpers.js";
 
-const raw = readFixture("学习进度总览.md");
+const raw = readFixture("PROGRESS.md");
 
 describe("splitSections", () => {
   it("ignores headings inside fenced code blocks", () => {

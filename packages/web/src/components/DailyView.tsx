@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CloseDayInput, CloseDayResult, SummaryDoc } from "@myblog/core";
 import { closeDay, errorMessage, getSummary, saveSummary, scaffoldDay } from "../api.js";
 import { useToast } from "../hooks/useToasts.js";
@@ -14,6 +14,7 @@ interface Props {
 }
 
 const SUMMARY_FILE = "总结.md";
+const DATE_PAGE = 120;
 
 export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
   const toast = useToast();
@@ -27,6 +28,35 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
   const [dryRun, setDryRun] = useState(true);
   const [closePreview, setClosePreview] = useState("");
   const [mode, setMode] = useState<"edit" | "split" | "preview">("edit");
+  const [dateLimit, setDateLimit] = useState(DATE_PAGE);
+
+  const [editor, setEditor] = useState<HTMLTextAreaElement | null>(null);
+  const [preview, setPreview] = useState<HTMLDivElement | null>(null);
+  const syncSource = useRef<"editor" | "preview" | null>(null);
+
+  useEffect(() => {
+    if (mode !== "split" || !editor || !preview) return;
+
+    const sync = (from: HTMLElement, to: HTMLElement, source: "editor" | "preview"): void => {
+      if (syncSource.current && syncSource.current !== source) return;
+      syncSource.current = source;
+      const fromMax = from.scrollHeight - from.clientHeight;
+      const toMax = to.scrollHeight - to.clientHeight;
+      to.scrollTop = fromMax > 0 ? (from.scrollTop / fromMax) * toMax : 0;
+      window.requestAnimationFrame(() => {
+        if (syncSource.current === source) syncSource.current = null;
+      });
+    };
+
+    const onEditor = (): void => sync(editor, preview, "editor");
+    const onPreview = (): void => sync(preview, editor, "preview");
+    editor.addEventListener("scroll", onEditor);
+    preview.addEventListener("scroll", onPreview);
+    return () => {
+      editor.removeEventListener("scroll", onEditor);
+      preview.removeEventListener("scroll", onPreview);
+    };
+  }, [mode, editor, preview]);
 
   const load = useCallback(
     async (target: string) => {
@@ -98,8 +128,9 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
 
   const current = summaries.find((summary) => summary.date === date);
 
+  const shown = summaries.slice(0, dateLimit);
   const dateGroups: { month: string; items: { summary: SummaryDoc; index: number }[] }[] = [];
-  summaries.forEach((summary, index) => {
+  shown.forEach((summary, index) => {
     const month = summary.date.slice(0, 7);
     const last = dateGroups[dateGroups.length - 1];
     if (last && last.month === month) last.items.push({ summary, index });
@@ -133,6 +164,11 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
           </div>
         ))}
         {summaries.length === 0 && <p className="muted">还没有任何总结。</p>}
+        {summaries.length > dateLimit && (
+          <button type="button" className="ghost date-more" onClick={() => setDateLimit((value) => value + DATE_PAGE)}>
+            显示更早的 {Math.min(summaries.length - dateLimit, DATE_PAGE)} 天
+          </button>
+        )}
         </div>
       </aside>
 
@@ -173,6 +209,7 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
             <div className={`editor-panes mode-${mode}`}>
               {mode !== "preview" && (
                 <textarea
+                  ref={setEditor}
                   className="editor-area"
                   value={content}
                   spellCheck={false}
@@ -184,7 +221,7 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
                 />
               )}
               {mode !== "edit" && (
-                <div className="markdown-preview">
+                <div className="markdown-preview" ref={setPreview}>
                   <Markdown>{content}</Markdown>
                 </div>
               )}

@@ -1,11 +1,14 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import type { ProgressSnapshot } from "@myblog/core";
-import { errorMessage, patchProgress } from "./api.js";
+import { errorMessage, patchProgress, searchWorkspace, setCapabilityStatus } from "./api.js";
 import {
   addWorkspace,
+  commitGit,
+  getGit,
   getWorkspaces,
   initWorkspace,
   switchWorkspace,
+  type GitState,
   type WorkspaceList,
 } from "./api.js";
 import { CapabilityMap } from "./components/CapabilityMap.js";
@@ -13,6 +16,8 @@ import { ChatView } from "./components/ChatView.js";
 import { CheckView } from "./components/CheckView.js";
 import { CommandPalette, type Command } from "./components/CommandPalette.js";
 import { DailyView } from "./components/DailyView.js";
+import { FilesView } from "./components/FilesView.js";
+import { GitCard } from "./components/GitCard.js";
 import { MarkdownProvider } from "./components/Markdown.js";
 import { ProgressCard } from "./components/ProgressCard.js";
 import { SettingsView } from "./components/SettingsView.js";
@@ -22,6 +27,7 @@ import { SkeletonCard } from "./components/Skeleton.js";
 import { ShortcutHelp } from "./components/ShortcutHelp.js";
 import { Timeline } from "./components/Timeline.js";
 import { TodayCard } from "./components/TodayCard.js";
+import { TooltipLayer } from "./components/Tooltip.js";
 import { WindowControls } from "./components/WindowControls.js";
 import { useToast } from "./hooks/useToasts.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
@@ -35,6 +41,7 @@ const TerminalView = lazy(() =>
 const TITLES: Record<View, string> = {
   overview: "概览",
   daily: "每日总结",
+  files: "文件",
   chat: "对话",
   terminal: "终端",
   check: "校验",
@@ -169,6 +176,7 @@ export function App() {
       { id: "view:overview", label: "打开：概览", run: () => setView("overview") },
       { id: "view:daily", label: "打开：每日总结", run: () => setView("daily") },
     ];
+    list.push({ id: "view:files", label: "打开：文件", run: () => setView("files") });
     if (prefs.chatEnabled) list.push({ id: "view:chat", label: "打开：对话", run: () => setView("chat") });
     if (prefs.terminalEnabled) list.push({ id: "view:terminal", label: "打开：终端", run: () => setView("terminal") });
     list.push({ id: "view:check", label: "打开：校验", run: () => setView("check") });
@@ -207,6 +215,32 @@ export function App() {
       try {
         const result = await patchProgress(patch);
         toast(result.changed ? "success" : "info", result.changed ? "已更新总览" : "内容没有变化");
+        await refresh();
+      } catch (caught) {
+        toast("error", errorMessage(caught));
+      }
+    },
+    [refresh, toast],
+  );
+
+  const runSearch = useCallback(
+    async (query: string) => (await searchWorkspace(query, 60)).hits,
+    [],
+  );
+
+  const openHit = useCallback(
+    (hit: { date: string | null }) => {
+      if (hit.date) openDate(hit.date);
+      else setView("overview");
+    },
+    [openDate],
+  );
+
+  const saveCapability = useCallback(
+    async (id: string, nextStatus: string) => {
+      try {
+        const result = await setCapabilityStatus(id, nextStatus);
+        toast(result.changed ? "success" : "info", result.changed ? `已更新 ${id} 状态` : "状态没有变化");
         await refresh();
       } catch (caught) {
         toast("error", errorMessage(caught));
@@ -254,7 +288,7 @@ export function App() {
                   <div className="empty-mark">M</div>
                   <h2>这个文件夹还不是学习仓</h2>
                   <p className="muted">
-                    没有找到「学习进度总览.md」。可以一键生成最小结构（学习进度总览 + 岗位目标），之后即可规划与写回；也可以先去「对话」里随便聊聊。
+                    没有找到「PROGRESS.md」。可以一键生成最小结构（学习进度总览 + 岗位目标），之后即可规划与写回；也可以先去「对话」里随便聊聊。
                   </p>
                   <button type="button" className="primary" onClick={() => void bootstrap()}>
                     初始化工作区
@@ -274,7 +308,13 @@ export function App() {
                 <div className="grid">
                   {status && <ProgressCard progress={status.progress} onSave={saveProgress} />}
                   {status && (
-                    <CapabilityMap capabilities={status.capabilities} selected={skill} onSelect={setSkill} />
+                    <CapabilityMap
+                      capabilities={status.capabilities}
+                      selected={skill}
+                      onSelect={setSkill}
+                      onSaveStatus={saveCapability}
+                      onInit={() => void bootstrap()}
+                    />
                   )}
                   {status && (
                     <Timeline
@@ -284,6 +324,7 @@ export function App() {
                       onOpen={openDate}
                     />
                   )}
+                  <GitCard onCommitted={refresh} />
                 </div>
               )}
             </div>
@@ -294,6 +335,14 @@ export function App() {
           <div className={viewClass("daily")}>
             <MarkdownProvider openDate={openDate}>
               <DailyView date={date} summaries={summaries} onSelectDate={setDate} onRefresh={refresh} />
+            </MarkdownProvider>
+          </div>
+        )}
+
+        {visited.files && (
+          <div className={viewClass("files")}>
+            <MarkdownProvider openDate={openDate}>
+              <FilesView root={status?.root ?? ""} />
             </MarkdownProvider>
           </div>
         )}
@@ -324,7 +373,14 @@ export function App() {
         </div>
       </main>
 
-      <CommandPalette open={paletteOpen} commands={commands} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette
+        open={paletteOpen}
+        commands={commands}
+        onClose={() => setPaletteOpen(false)}
+        onSearch={runSearch}
+        onOpenHit={openHit}
+      />
+      <TooltipLayer />
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );

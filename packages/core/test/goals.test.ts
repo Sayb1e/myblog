@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { activeStageIds, getCapability, parseGoals } from "../src/goals.js";
+import { activeStageIds, getCapability, parseGoals, updateCapabilityStatus } from "../src/goals.js";
 import { readFixture } from "./helpers.js";
 
-const raw = readFixture("岗位目标.md");
+const raw = readFixture("GOALS.md");
 
 describe("parseGoals", () => {
   it("parses the current stage, capabilities and order", () => {
@@ -22,5 +22,27 @@ describe("activeStageIds", () => {
 
   it("falls back to every id when nothing is bold", () => {
     expect(activeStageIds("现在 G3，之后 G4")).toEqual(["G3", "G4"]);
+  });
+});
+
+describe("updateCapabilityStatus", () => {
+  it("replaces only the status cell of the target row", () => {
+    const next = updateCapabilityStatus(raw, "G3", "进行中");
+    expect(next).not.toBe(raw);
+    expect(getCapability(parseGoals(next), "G3")?.status).toBe("进行中");
+    expect(getCapability(parseGoals(next), "G2")?.status).toBe("已闭环");
+    expect(next.split(/\r?\n/).length).toBe(raw.split(/\r?\n/).length);
+  });
+
+  it("keeps line endings untouched", () => {
+    const crlf = raw.replace(/\r?\n/g, "\r\n");
+    const next = updateCapabilityStatus(crlf, "G3", "进行中");
+    expect(next.includes("\r\n")).toBe(true);
+    expect(next.replace(/\r\n/g, "")).not.toContain("\n");
+  });
+
+  it("is a no-op for unknown ids or identical status", () => {
+    expect(updateCapabilityStatus(raw, "G99", "进行中")).toBe(raw);
+    expect(updateCapabilityStatus(raw, "G3", "未开始")).toBe(raw);
   });
 });

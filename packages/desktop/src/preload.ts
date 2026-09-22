@@ -9,6 +9,8 @@ export interface TerminalOptions {
 contextBridge.exposeInMainWorld("myblog", {
   desktop: true,
   pickDirectory: () => ipcRenderer.invoke("dialog:pick-directory") as Promise<string | null>,
+  absolutePath: (relative: string) => ipcRenderer.invoke("shell:absolute", relative) as Promise<string>,
+  reveal: (relative: string) => ipcRenderer.send("shell:reveal", relative),
   setTheme: (theme: "dark" | "light" | "system") => ipcRenderer.send("theme:set", theme),
   windowControls: {
     minimize: () => ipcRenderer.send("window:minimize"),
@@ -16,6 +18,23 @@ contextBridge.exposeInMainWorld("myblog", {
     close: () => ipcRenderer.send("window:close"),
     onMaximized: (listener: (maximized: boolean) => void) => {
       ipcRenderer.on("window:maximized", (_event, maximized: boolean) => listener(maximized));
+    },
+  },
+  api: {
+    invoke: (method: string, payload?: unknown) => ipcRenderer.invoke("myblog:invoke", method, payload),
+    chat: (payload: { streamId: string; messages: { role: "user" | "assistant"; content: string }[] }) =>
+      ipcRenderer.invoke("myblog:chat", payload) as Promise<void>,
+    cancelChat: (streamId: string) => ipcRenderer.send("myblog:chat-cancel", streamId),
+    onChatEvent: (listener: (payload: { streamId: string; event: unknown }) => void) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: { streamId: string; event: unknown }) =>
+        listener(payload);
+      ipcRenderer.on("myblog:chat-event", wrapped);
+      return () => ipcRenderer.removeListener("myblog:chat-event", wrapped);
+    },
+    onFsChange: (listener: () => void) => {
+      const wrapped = () => listener();
+      ipcRenderer.on("myblog:fs-change", wrapped);
+      return () => ipcRenderer.removeListener("myblog:fs-change", wrapped);
     },
   },
   terminal: {

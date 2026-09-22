@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 export type ThemePref = "dark" | "light" | "system";
 export type StylePref = "native" | "product";
-export type AccentPref = "blue" | "violet" | "green" | "orange";
+export type AccentPref = "blue" | "violet" | "green" | "orange" | "rose" | "cyan" | "amber" | "lime";
 export type FontPref = "sm" | "md" | "lg";
 
 export interface Prefs {

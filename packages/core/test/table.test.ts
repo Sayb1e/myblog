@@ -9,7 +9,7 @@ import {
 } from "../src/table.js";
 import { readFixture } from "./helpers.js";
 
-const raw = readFixture("学习进度总览.md");
+const raw = readFixture("PROGRESS.md");
 
 describe("findFirstTable", () => {
   it("returns absolute offsets relative to the passed raw markdown", () => {

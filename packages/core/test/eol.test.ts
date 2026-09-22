@@ -3,7 +3,7 @@ import { detectEol, upsertLabeledParagraph } from "../src/markdown.js";
 import { addRecord, parseOverview, updateProgress } from "../src/overview.js";
 import { readFixture } from "./helpers.js";
 
-const lf = readFixture("学习进度总览.md");
+const lf = readFixture("PROGRESS.md");
 const crlf = lf.replace(/\n/g, "\r\n");
 
 function loneLf(text: string): number {

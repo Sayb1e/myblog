@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { App } from "../src/App.js";
 import { ToastProvider } from "../src/hooks/useToasts.js";
 
@@ -50,47 +50,39 @@ const summaries = [
   },
 ];
 
-function json(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  });
-}
+function stubBridge(): void {
+  const responses: Record<string, unknown> = {
+    status,
+    today,
+    check,
+    summaries,
+    sessions: { active: "", sessions: [] },
+    history: { session: null, messages: [] },
+    agent: { configured: false, baseURL: "", model: "", hasApiKey: false, configPath: "" },
+    workspaces: { active: status.root, list: [status.root] },
+    git: { isRepo: false, branch: "", dirty: 0, lastCommit: "", suggested: "" },
+    search: { query: "", hits: [] },
+  };
 
-class FakeEventSource {
-  static instances: FakeEventSource[] = [];
-  listeners = new Map<string, () => void>();
-  onerror: (() => void) | null = null;
-  constructor(public url: string) {
-    FakeEventSource.instances.push(this);
-  }
-  addEventListener(type: string, listener: () => void): void {
-    this.listeners.set(type, listener);
-  }
-  close(): void {}
+  (window as { myblog?: unknown }).myblog = {
+    desktop: true,
+    api: {
+      invoke: async (method: string) => responses[method] ?? {},
+      chat: async () => {},
+      cancelChat: () => {},
+      onChatEvent: () => () => {},
+      onFsChange: () => () => {},
+    },
+  };
 }
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  FakeEventSource.instances = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/api/status")) return json(status);
-      if (url.includes("/api/today")) return json(today);
-      if (url.includes("/api/check")) return json(check);
-      if (url.includes("/api/chat/history")) return json({ messages: [] });
-      if (url.includes("/api/agent")) return json({ configured: false, baseURL: "", model: "", hasApiKey: false, configPath: "" });
-      if (url.includes("/api/summaries")) return json(summaries);
-      return json({});
-    }),
-  );
-  vi.stubGlobal("EventSource", FakeEventSource);
+  stubBridge();
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  delete (window as { myblog?: unknown }).myblog;
 });
 
 describe("App", () => {

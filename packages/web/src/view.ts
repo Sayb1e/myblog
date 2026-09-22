@@ -1,1 +1,1 @@
-export type View = "overview" | "daily" | "chat" | "terminal" | "check" | "settings";
+export type View = "overview" | "daily" | "files" | "chat" | "terminal" | "check" | "settings";

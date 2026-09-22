@@ -7,9 +7,11 @@ import {
   IconChevron,
   IconDaily,
   IconFolder,
+  IconFolderOpen,
   IconOverview,
   IconSettings,
   IconTerminal,
+  IconWrench,
 } from "./icons.js";
 import { Select, type SelectOption } from "./Select.js";
 
@@ -49,6 +51,7 @@ export function Sidebar({
   const items: Item[] = [
     { key: "overview", label: "概览", icon: <IconOverview /> },
     { key: "daily", label: "每日总结", icon: <IconDaily /> },
+    { key: "files", label: "文件", icon: <IconFolderOpen /> },
   ];
   if (prefs.chatEnabled) items.push({ key: "chat", label: "对话", icon: <IconChat /> });
   if (hasTerminal && prefs.terminalEnabled) items.push({ key: "terminal", label: "终端", icon: <IconTerminal /> });
@@ -92,7 +95,7 @@ export function Sidebar({
             placeholder="工作区"
             title={root}
             placement="up"
-            icon={<IconFolder />}
+            icon={<IconWrench />}
             action={{ label: "添加工作区…", icon: <IconFolder />, onSelect: onAddWorkspace }}
           />
         </div>

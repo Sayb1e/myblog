@@ -3,7 +3,7 @@ import path from "node:path";
 import { loadConfig, type WorkspaceConfig } from "./config.js";
 import { detectEol } from "./markdown.js";
 import { readGoals, type GoalsDoc } from "./goals.js";
-import { parseGoals } from "./goals.js";
+import { parseGoals, updateCapabilityStatus } from "./goals.js";
 import { scaffoldGoals, scaffoldOverview } from "./bootstrap.js";
 import {
   addRecord,
@@ -108,6 +108,13 @@ export class Workspace {
     return pathExists(this.goalsPath);
   }
 
+  async setCapabilityStatus(id: string, status: string): Promise<{ changed: boolean }> {
+    const raw = await readFile(this.goalsPath, "utf8");
+    const next = updateCapabilityStatus(raw, id, status);
+    if (next !== raw) await writeFile(this.goalsPath, next, "utf8");
+    return { changed: next !== raw };
+  }
+
   async readStatusSafe(): Promise<{ initialized: boolean; status: WorkspaceStatus | null }> {
     if (!(await this.hasOverview())) return { initialized: false, status: null };
     const overview = await this.readOverview();
@@ -122,6 +129,7 @@ export class Workspace {
 
   async initWorkspace(): Promise<{ created: string[] }> {
     const created: string[] = [];
+    await mkdir(this.config.root, { recursive: true });
     if (!(await pathExists(this.overviewPath))) {
       await writeFile(this.overviewPath, scaffoldOverview(), "utf8");
       created.push(this.config.overview);

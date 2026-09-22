@@ -6,7 +6,9 @@ import {
   errorMessage,
   getAgentConfig,
   getChatHistory,
+  getOpencodeAuth,
   getSessions,
+  importOpencode,
   renameSession,
   saveAgentConfig,
   saveChatHistory,
@@ -14,6 +16,7 @@ import {
   type AgentConfigView,
   type ChatEvent,
   type ChatMessageRecord,
+  type OpencodeAuthView,
   type SessionMeta,
 } from "../api.js";
 import { useToast } from "../hooks/useToasts.js";
@@ -37,6 +40,8 @@ interface Message {
 }
 
 const PRESETS: { id: string; label: string; baseURL: string; model: string }[] = [
+  { id: "opencode-go", label: "OpenCode Go", baseURL: "https://opencode.ai/zen/go/v1", model: "grok-4.6" },
+  { id: "opencode-zen", label: "OpenCode Zen", baseURL: "https://opencode.ai/zen/v1", model: "grok-code" },
   { id: "openai", label: "OpenAI", baseURL: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   { id: "deepseek", label: "DeepSeek", baseURL: "https://api.deepseek.com/v1", model: "deepseek-chat" },
   { id: "dashscope", label: "通义千问", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
@@ -53,6 +58,9 @@ const TOOL_META: Record<string, { label: string; icon: string; write?: boolean }
   myblog_read_summary: { label: "读取每日总结", icon: "▤" },
   myblog_scaffold: { label: "创建当日总结", icon: "＋", write: true },
   myblog_close: { label: "写回总览", icon: "↩", write: true },
+  fs_list: { label: "列出文件", icon: "▤" },
+  fs_read: { label: "读取文件", icon: "▤" },
+  fs_write: { label: "写入文件", icon: "＋", write: true },
 };
 
 const SUGGESTIONS = ["今天学什么？", "帮我收工写回", "校验一下工作区"];
@@ -146,6 +154,7 @@ export function ChatView() {
   const [streaming, setStreaming] = useState(false);
   const [config, setConfig] = useState<AgentConfigView | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [opencode, setOpencode] = useState<OpencodeAuthView | null>(null);
   const [baseURL, setBaseURL] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -176,6 +185,26 @@ export function ChatView() {
   useEffect(() => {
     void loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    void getOpencodeAuth()
+      .then(setOpencode)
+      .catch(() => setOpencode(null));
+  }, [settingsOpen]);
+
+  const importFromOpencode = async (provider: string): Promise<void> => {
+    try {
+      const result = await importOpencode(provider);
+      setBaseURL(result.baseURL);
+      setModel(result.model);
+      setApiKey("");
+      toast("success", `已从 opencode 导入 ${result.provider}`);
+      await loadConfig();
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
 
   const loadActive = useCallback(async (): Promise<void> => {
     const stored = await getChatHistory();
@@ -410,14 +439,15 @@ export function ChatView() {
             placeholder="会话"
             action={{ label: "新建会话", icon: <IconPlus />, onSelect: () => void newSession() }}
           />
-          <button type="button" className="icon-btn sm" onClick={openRename} title="重命名会话">
+          <button type="button" className="icon-btn sm" onClick={openRename} aria-label="重命名会话" data-tip="重命名会话">
             <IconPencil />
           </button>
           <button
             type="button"
             className="icon-btn sm"
             onClick={() => setConfirmDelete(true)}
-            title="删除当前会话"
+            aria-label="删除当前会话"
+            data-tip="删除当前会话"
             disabled={sessions.length <= 1}
           >
             <IconTrash />
@@ -467,6 +497,16 @@ export function ChatView() {
               placeholder={config?.hasApiKey ? "已保存，留空则不改" : "sk-..."}
             />
           </label>
+          {opencode && opencode.available.length > 0 && (
+            <div className="row opencode-import">
+              <span className="muted">检测到 opencode 登录：</span>
+              {opencode.available.map((entry) => (
+                <button key={entry.id} type="button" onClick={() => void importFromOpencode(entry.id)}>
+                  导入 {entry.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="row">
             <button type="button" className="primary" onClick={() => void saveSettings()}>
               保存

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addRecord, parseOverview, updateProgress } from "../src/overview.js";
 import { readFixture } from "./helpers.js";
 
-const raw = readFixture("学习进度总览.md");
+const raw = readFixture("PROGRESS.md");
 
 describe("parseOverview", () => {
   it("parses progress, records, directions and tools", () => {

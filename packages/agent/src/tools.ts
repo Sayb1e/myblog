@@ -10,12 +10,12 @@ import {
 import type { ToolSpec } from "./provider.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const READ_LIMIT = 256 * 1024;
+export const READ_LIMIT = 256 * 1024;
 const WRITE_LIMIT = 1024 * 1024;
-const LIST_LIMIT = 500;
-const SKIP_DIRS = new Set([".git", "node_modules", "dist", "release"]);
+export const LIST_LIMIT = 500;
+export const SKIP_DIRS = new Set([".git", "node_modules", "dist", "release"]);
 
-function resolveInside(root: string, target: unknown): string {
+export function resolveInside(root: string, target: unknown): string {
   const value = typeof target === "string" ? target.trim() : "";
   if (value === "") throw new Error("路径不能为空");
   if (isAbsolute(value)) throw new Error("请使用相对工作区根目录的路径");
@@ -33,7 +33,7 @@ function resolveOrError(root: string, target: unknown): string | { error: string
   }
 }
 
-function toRelative(root: string, absolute: string): string {
+export function toRelative(root: string, absolute: string): string {
   const rel = relative(root, absolute);
   return rel === "" ? "." : rel.split("\\").join("/");
 }
@@ -43,7 +43,7 @@ function preferredEol(content: string, before: string): string {
   return content.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n");
 }
 
-function isBinary(buffer: Buffer): boolean {
+export function isBinary(buffer: Buffer): boolean {
   return buffer.subarray(0, 8192).includes(0);
 }
 

@@ -1,6 +1,6 @@
 用户输入（可选）：$ARGUMENTS
 
-目标：把今天的结果写进工作区（`YYYY-MM-DD/总结.md` 与 `学习进度总览.md`），所有写操作可 diff、幂等。
+目标：把今天的结果写进工作区（`YYYY-MM-DD/总结.md` 与 `PROGRESS.md`），所有写操作可 diff、幂等。
 
 步骤：
 

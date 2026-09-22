@@ -12,11 +12,13 @@ export function useLiveRefresh(onChange: () => void): boolean {
       setConnected(false);
       return;
     }
-    const source = new EventSource("/api/events");
-    source.addEventListener("ready", () => setConnected(true));
-    source.addEventListener("change", () => callback.current());
-    source.onerror = () => setConnected(false);
-    return () => source.close();
+    const api = window.myblog?.api;
+    if (!api) {
+      setConnected(false);
+      return;
+    }
+    setConnected(true);
+    return api.onFsChange(() => callback.current());
   }, [prefs.liveRefresh]);
 
   return connected;

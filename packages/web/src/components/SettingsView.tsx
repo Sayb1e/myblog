@@ -149,6 +149,10 @@ export function SettingsView({ root, version }: Props) {
                     { id: "violet", label: "紫" },
                     { id: "green", label: "绿" },
                     { id: "orange", label: "橙" },
+                    { id: "rose", label: "玫红" },
+                    { id: "cyan", label: "青" },
+                    { id: "amber", label: "琥珀" },
+                    { id: "lime", label: "青柠" },
                   ] as { id: AccentPref; label: string }[]
                 ).map((option) => (
                   <button
@@ -156,7 +160,7 @@ export function SettingsView({ root, version }: Props) {
                     type="button"
                     className={`accent-dot accent-${option.id}${prefs.accent === option.id ? " active" : ""}`}
                     onClick={() => setPref("accent", option.id)}
-                    title={option.label}
+                    data-tip={option.label}
                     aria-label={option.label}
                   />
                 ))}

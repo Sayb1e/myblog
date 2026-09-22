@@ -27,7 +27,7 @@ export function TodayCard({ plan, workspace, onOpenDate, onOpenPalette, onInit }
           <span className="chip accent">{dateLabel}</span>
           <span className="chip">{plan.stageIds.join(" · ") || "未识别阶段"}</span>
           {onOpenPalette && (
-            <button type="button" className="icon-btn sm hero-cmd" onClick={onOpenPalette} title="命令面板 (Ctrl+K)">
+            <button type="button" className="icon-btn sm hero-cmd" onClick={onOpenPalette} data-tip="命令面板 (Ctrl+K)">
               <IconCommand />
             </button>
           )}
@@ -63,7 +63,7 @@ export function TodayCard({ plan, workspace, onOpenDate, onOpenPalette, onInit }
         <div className="hero-hint">
           <span className="muted">
             {plan.missing.includes("goals")
-              ? "未设置「岗位目标.md」：规划只依据总览（阶段已从「下次从哪继续」推断）。"
+              ? "未设置「GOALS.md」：规划只依据总览（阶段已从「下次从哪继续」推断）。"
               : "还没有任何每日总结。"}
           </span>
           {plan.missing.includes("goals") && onInit && (

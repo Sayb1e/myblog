@@ -97,19 +97,19 @@ export function DatePicker({ value, onChange }: Props) {
       {open && (
         <div className="datepicker-pop">
           <div className="datepicker-head">
-            <button type="button" className="dp-nav" onClick={() => shift(0, -1)} title="上一年">
+            <button type="button" className="dp-nav" aria-label="上一年" onClick={() => shift(0, -1)} data-tip="上一年">
               «
             </button>
-            <button type="button" className="dp-nav" onClick={() => shift(-1, 0)} title="上个月">
+            <button type="button" className="dp-nav" aria-label="上个月" onClick={() => shift(-1, 0)} data-tip="上个月">
               <IconChevron />
             </button>
             <span className="dp-label">
               {cursor.year} 年 {cursor.month} 月
             </span>
-            <button type="button" className="dp-nav flip" onClick={() => shift(1, 0)} title="下个月">
+            <button type="button" className="dp-nav flip" aria-label="下个月" onClick={() => shift(1, 0)} data-tip="下个月">
               <IconChevron />
             </button>
-            <button type="button" className="dp-nav" onClick={() => shift(0, 1)} title="下一年">
+            <button type="button" className="dp-nav" aria-label="下一年" onClick={() => shift(0, 1)} data-tip="下一年">
               »
             </button>
           </div>

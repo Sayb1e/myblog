@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { addRecord, parseOverview, updateProgress } from "../src/overview.js";
 
 const realRoot = process.env.MYBLOG_REAL_ROOT;
-const suite = realRoot && existsSync(path.join(realRoot, "学习进度总览.md")) ? describe : describe.skip;
+const suite = realRoot && existsSync(path.join(realRoot, "PROGRESS.md")) ? describe : describe.skip;
 
 suite("real workspace (set MYBLOG_REAL_ROOT to enable)", () => {
-  const overviewPath = path.join(realRoot ?? "", "学习进度总览.md");
+  const overviewPath = path.join(realRoot ?? "", "PROGRESS.md");
 
   it("parses the real overview", () => {
     const doc = parseOverview(readFileSync(overviewPath, "utf8"));

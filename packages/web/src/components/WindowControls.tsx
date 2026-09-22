@@ -13,18 +13,19 @@ export function WindowControls() {
 
   return (
     <div className="win-controls">
-      <button type="button" className="win-btn" title="最小化" onClick={() => controls.minimize()}>
+      <button type="button" className="win-btn" aria-label="最小化" data-tip="最小化" onClick={() => controls.minimize()}>
         <IconMinimize />
       </button>
       <button
         type="button"
         className="win-btn"
-        title={maximized ? "还原" : "最大化"}
+        aria-label={maximized ? "还原" : "最大化"}
+        data-tip={maximized ? "还原" : "最大化"}
         onClick={() => controls.toggleMaximize()}
       >
         {maximized ? <IconRestore /> : <IconMaximize />}
       </button>
-      <button type="button" className="win-btn close" title="关闭" onClick={() => controls.close()}>
+      <button type="button" className="win-btn close" aria-label="关闭" data-tip="关闭" onClick={() => controls.close()}>
         <IconClose />
       </button>
     </div>

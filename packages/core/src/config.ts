@@ -12,8 +12,8 @@ export interface WorkspaceConfig {
 }
 
 export const DEFAULT_CONFIG: Omit<WorkspaceConfig, "root"> = {
-  overview: "学习进度总览.md",
-  goals: "岗位目标.md",
+  overview: "PROGRESS.md",
+  goals: "GOALS.md",
   dailyDirPattern: "YYYY-MM-DD",
   summaryFile: "总结.md",
   skillPrefix: "G",

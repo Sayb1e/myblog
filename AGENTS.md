@@ -8,7 +8,7 @@ MyBlog 仓库的开发约定。给在本仓工作的 AI/人类协作者。
 packages/core      解析/生成/校验/组装（唯一引擎，无 LLM、无 DB）
 packages/agent     OpenAI 兼容模型客户端 + 工具循环（唯一持 key）
 packages/cli       myblog 命令（status/init/mcp；其余功能在桌面端）
-packages/server    Hono API + SSE（/api/chat、/api/events），桌面端内置使用
+packages/server    与传输无关的工作区 API handler（无网络；桌面端经 IPC 调用）
 packages/web       Vite + React 界面（由桌面端加载）
 packages/desktop   Electron：内置 server + 真终端（node-pty）
 ```
@@ -56,5 +56,9 @@ npm run app            # build 全部 + 启动 Electron
   `$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"; node node_modules/electron/install.js`
 - `node-pty` 是原生模块，且 `binding.gyp` 默认要求 Spectre 库（VS 未装会编译失败）。跑一次
   `npm run fix:native --workspace @myblog/desktop`（内部会关掉 Spectre 要求并针对 Electron 重编）。
-- 打包：`$env:ELECTRON_BUILDER_BINARIES_MIRROR="..." ; npx electron-builder --win portable`（在 `packages/desktop` 下）。
+- 打包：先 `npm run build`（core→agent→server→cli→web）**再 `npm run build --workspace @myblog/desktop`**——根 `npm run build` 不含 Electron main，漏掉会把旧 main.js 打进包。然后
+  `$env:ELECTRON_BUILDER_BINARIES_MIRROR="..." ; npx electron-builder --win portable|--win --dir`（在 `packages/desktop` 下）。
+- 无端口架构：桌面端不再起 HTTP 服务，main 通过 IPC（`myblog:invoke` / `myblog:chat-event` / `myblog:fs-change`）调用 `@myblog/server` 的 `createApi()`。
+- 冒烟：`$env:MYBLOG_DESKTOP_SMOKE="1"; $env:MYBLOG_DESKTOP_ROOT="<工作区>"` 启动 exe，会打印 `SMOKE_OK` 与页面文本；加 `"pty"` 再验终端。
+- 调试渲染进程：`MYBLOG_DESKTOP_SMOKE="1"` + `MYBLOG_DESKTOP_EVAL="<js>"` 会在页面里执行该表达式并打印 `SMOKE_EVAL=`（用于量坐标等，别在正式功能里依赖）。
 - 终端用 winpty 后端（`useConpty: false`），ConPTY 的 console-list 辅助进程在 Electron 下会崩。

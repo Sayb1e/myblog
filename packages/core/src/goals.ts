@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { findSection, splitSections } from "./markdown.js";
-import { findFirstTable } from "./table.js";
+import { findFirstTable, formatTableRow, splitTableRow } from "./table.js";
 
 export interface Capability {
   id: string;
@@ -68,4 +68,26 @@ export async function readGoals(path: string): Promise<GoalsDoc> {
 
 export function getCapability(goals: GoalsDoc, id: string): Capability | undefined {
   return goals.capabilities.find((capability) => capability.id === id);
+}
+
+export function updateCapabilityStatus(raw: string, id: string, status: string): string {
+  const sections = splitSections(raw);
+  const capabilitySection = findSection(sections, CAPABILITY_TITLE);
+  if (!capabilitySection) return raw;
+
+  const table = findFirstTable(capabilitySection.body, capabilitySection.bodyStart);
+  if (!table) return raw;
+
+  const index = table.rows.findIndex((cells) => (cells[0] ?? "").replace(/`/g, "").trim() === id);
+  const line = index < 0 ? undefined : table.rowLines[index];
+  if (line === undefined) return raw;
+
+  const cells = splitTableRow(line);
+  const column = cells.length >= 4 ? 3 : cells.length - 1;
+  if (column < 0 || cells[column] === status) return raw;
+  cells[column] = status;
+
+  const at = raw.indexOf(line, table.start);
+  if (at < 0) return raw;
+  return raw.slice(0, at) + formatTableRow(cells) + raw.slice(at + line.length);
 }

@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: build windows artifacts
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: ensure electron binary
+        run: node node_modules/electron/install.js
+
+      - run: npm run build
+      - run: npm run build --workspace @myblog/desktop
+
+      - name: rebuild node-pty for electron
+        run: npm run fix:native --workspace @myblog/desktop
+
+      - name: package (portable + nsis)
+        run: npx electron-builder --win portable nsis --publish never
+        working-directory: packages/desktop
+
+      - name: copy changelog next to artifacts
+        run: node scripts/copy-changelog.mjs
+        working-directory: packages/desktop
+
+      - name: sha256 checksums
+        shell: pwsh
+        run: |
+          cd packages/desktop/release
+          $lines = Get-ChildItem -File -Filter *.exe | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLower()
+            "$hash  $($_.Name)"
+          }
+          $lines | Set-Content -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+
+      - name: publish release (draft)
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            packages/desktop/release/*.exe
+            packages/desktop/release/CHANGELOG.md
+            packages/desktop/release/SHA256SUMS.txt

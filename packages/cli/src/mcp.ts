@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { executeTool } from "@myblog/agent";
 import type { CloseDayInput, Workspace } from "@myblog/core";
 import { buildContext } from "./bundle.js";
 import { diffLines } from "./format.js";
@@ -110,6 +111,42 @@ export function createMcpServer(workspace: Workspace): McpServer {
       const diff = result.preview ? diffLines(before, result.preview) : [];
       return json({ ...result, dryRun, diff });
     },
+  );
+
+  server.registerTool(
+    "fs_list",
+    {
+      title: "List workspace files",
+      description: "列出工作区内某个目录的文件与子目录（相对工作区根目录的路径，默认根目录）。",
+      inputSchema: { path: z.string().optional().describe("相对路径，默认 .（工作区根目录）") },
+    },
+    async ({ path }) => json(await executeTool(workspace, "fs_list", { path: path ?? "." })),
+  );
+
+  server.registerTool(
+    "fs_read",
+    {
+      title: "Read a workspace file",
+      description: "读取工作区内的文本文件（相对路径）。超过 256KB 只返回开头并标记 truncated。",
+      inputSchema: { path: z.string().describe("相对工作区根目录的文件路径") },
+    },
+    async ({ path }) => json(await executeTool(workspace, "fs_read", { path })),
+  );
+
+  server.registerTool(
+    "fs_write",
+    {
+      title: "Write a workspace file",
+      description:
+        "把文本写入工作区内的文件（相对路径，父目录会自动创建）。默认 dryRun=true，只返回 diff 预览、不写盘；必须先把 diff 给用户确认，用户同意后再以 dryRun=false 调用才真正写入。",
+      inputSchema: {
+        path: z.string().describe("相对工作区根目录的文件路径"),
+        content: z.string().describe("完整的新内容（整体覆盖该文件）"),
+        dryRun: z.boolean().optional().describe("默认 true；确认后传 false 才落盘"),
+      },
+    },
+    async ({ path, content, dryRun }) =>
+      json(await executeTool(workspace, "fs_write", { path, content, dryRun: dryRun !== false })),
   );
 
   return server;

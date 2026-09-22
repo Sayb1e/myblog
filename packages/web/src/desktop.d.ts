@@ -1,3 +1,5 @@
+import type { AgentEvent, ApiMethod, ApiPayload, ApiResult } from "@myblog/server";
+
 export {};
 
 declare global {
@@ -11,10 +13,23 @@ declare global {
     removeAllListeners(): void;
   }
 
+  interface MyBlogApiBridge {
+    invoke<M extends ApiMethod>(method: M, payload?: ApiPayload<M>): Promise<ApiResult<M>>;
+    chat(payload: {
+      streamId: string;
+      messages: { role: "user" | "assistant"; content: string }[];
+    }): Promise<void>;
+    cancelChat(streamId: string): void;
+    onChatEvent(listener: (payload: { streamId: string; event: AgentEvent }) => void): () => void;
+    onFsChange(listener: () => void): () => void;
+  }
+
   interface Window {
     myblog?: {
       desktop?: boolean;
       pickDirectory?: () => Promise<string | null>;
+      absolutePath?: (relative: string) => Promise<string>;
+      reveal?: (relative: string) => void;
       setTheme?: (theme: "dark" | "light" | "system") => void;
       windowControls?: {
         minimize: () => void;
@@ -22,6 +37,7 @@ declare global {
         close: () => void;
         onMaximized: (listener: (maximized: boolean) => void) => void;
       };
+      api?: MyBlogApiBridge;
       terminal?: MyBlogTerminalApi;
     };
   }

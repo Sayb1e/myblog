@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { LearningRecord } from "@myblog/core";
 import { revealStyle } from "../reveal.js";
 import { Markdown } from "./Markdown.js";
@@ -9,8 +10,18 @@ interface Props {
   onOpen: (date: string) => void;
 }
 
+const PAGE = 120;
+
 export function Timeline({ records, skillsByDate, skill, onOpen }: Props) {
-  const visible = skill ? records.filter((record) => skillsByDate.get(record.date)?.includes(skill)) : records;
+  const [limit, setLimit] = useState(PAGE);
+
+  useEffect(() => {
+    setLimit(PAGE);
+  }, [skill]);
+
+  const matched = skill ? records.filter((record) => skillsByDate.get(record.date)?.includes(skill)) : records;
+  const visible = matched.slice(0, limit);
+  const remaining = matched.length - visible.length;
 
   const groups: { month: string; items: { record: LearningRecord; index: number }[] }[] = [];
   visible.forEach((record, index) => {
@@ -25,9 +36,10 @@ export function Timeline({ records, skillsByDate, skill, onOpen }: Props) {
       <div className="card-head">
         <h2>时间线</h2>
         {skill && <span className="chip">筛选 {skill}</span>}
+        {matched.length > PAGE && <span className="muted">共 {matched.length} 条</span>}
       </div>
 
-      {visible.length === 0 && <p className="muted">没有记录。</p>}
+      {matched.length === 0 && <p className="muted">没有记录。</p>}
 
       <ol className="timeline">
         {groups.map((group) => (
@@ -68,6 +80,14 @@ export function Timeline({ records, skillsByDate, skill, onOpen }: Props) {
           </li>
         ))}
       </ol>
+
+      {remaining > 0 && (
+        <div className="row">
+          <button type="button" onClick={() => setLimit((current) => current + PAGE)}>
+            显示更早的 {Math.min(remaining, PAGE)} 条
+          </button>
+        </div>
+      )}
     </section>
   );
 }

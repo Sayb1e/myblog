@@ -56,7 +56,9 @@ export async function checkWorkspace(config: WorkspaceConfig): Promise<CheckResu
   const overviewRaw = await readTextOrNull(path.join(config.root, config.overview));
   const goalsRaw = await readTextOrNull(path.join(config.root, config.goals));
   if (overviewRaw === null) add("error", "missing-overview", `找不到总览文件：${config.overview}`, config.overview);
-  if (goalsRaw === null) add("error", "missing-goals", `找不到岗位目标文件：${config.goals}`, config.goals);
+  if (goalsRaw === null) {
+    add("warn", "missing-goals", `没有能力地图文件（${config.goals}）：阶段与能力地图会为空，可不创建`, config.goals);
+  }
 
   const overview = overviewRaw === null ? null : parseOverview(overviewRaw, config.overview);
   const goals = goalsRaw === null ? null : parseGoals(goalsRaw, config.goals);
