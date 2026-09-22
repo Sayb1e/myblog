@@ -56,6 +56,7 @@ npm run app            # build 全部 + 启动 Electron
   `$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"; node node_modules/electron/install.js`
 - `node-pty` 是原生模块，且 `binding.gyp` 默认要求 Spectre 库（VS 未装会编译失败）。跑一次
   `npm run fix:native --workspace @myblog/desktop`（内部会关掉 Spectre 要求并针对 Electron 重编）。
+- 图标：`node packages/desktop/scripts/make-icons.mjs` 生成 `packages/desktop/build/`（512 PNG + 多尺寸 ICO + NSIS 侧栏/头部 BMP）；换品牌色后重跑。
 - 打包：先 `npm run build`（core→agent→server→cli→web）**再 `npm run build --workspace @myblog/desktop`**——根 `npm run build` 不含 Electron main，漏掉会把旧 main.js 打进包。然后
   `$env:ELECTRON_BUILDER_BINARIES_MIRROR="..." ; npx electron-builder --win portable|--win --dir`（在 `packages/desktop` 下）。
 - 无端口架构：桌面端不再起 HTTP 服务，main 通过 IPC（`myblog:invoke` / `myblog:chat-event` / `myblog:fs-change`）调用 `@myblog/server` 的 `createApi()`。

@@ -1,6 +1,6 @@
 {
   "name": "@myblog/core",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Markdown workspace engine for MyBlog.",
   "type": "module",
   "license": "MIT",

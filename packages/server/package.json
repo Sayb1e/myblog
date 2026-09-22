@@ -1,6 +1,6 @@
 {
   "name": "@myblog/server",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Workspace API handlers for MyBlog (transport-agnostic, no network).",
   "type": "module",
   "license": "MIT",

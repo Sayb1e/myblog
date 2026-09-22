@@ -1,6 +1,6 @@
 {
   "name": "@myblog/desktop",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Desktop shell for MyBlog (Electron).",
   "type": "module",
@@ -43,9 +43,15 @@
       "output": "release"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
       ]
     },
     "portable": {
@@ -54,17 +60,25 @@
     "nsis": {
       "artifactName": "${productName}_v${version}_setup.${ext}",
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "menuCategory": false,
+      "shortcutName": "MyBlog",
+      "runAfterFinish": true,
+      "language": "2052",
+      "license": "../../LICENSE",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "installerHeader": "build/installerHeader.bmp",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp"
     },
     "mac": {
       "target": [
         "dmg"
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
       ]
     }
   }

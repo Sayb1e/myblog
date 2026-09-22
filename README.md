@@ -3,7 +3,7 @@
 [![CI](https://github.com/Sayb1e/myblog/actions/workflows/ci.yml/badge.svg)](https://github.com/Sayb1e/myblog/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg)](https://nodejs.org/)
-[![version](https://img.shields.io/badge/version-1.2.0-informational.svg)](./CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.2.1-informational.svg)](./CHANGELOG.md)
 
 管理「基于 markdown 的本地学习工作区」的**桌面应用（Electron）+ CLI**：解析与写回**进度总览 / 岗位能力地图 / 每日总结**，把「今天学什么、上次停在哪」变得可见、可 diff、可回滚。
 
@@ -15,9 +15,9 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| `MyBlog_v1.2.0_setup.exe` | **安装版**（NSIS，推荐）：可选安装目录、建桌面/开始菜单快捷方式、带卸载项；装到用户目录，不需要管理员权限 |
-| `MyBlog_v1.2.0_portable.exe` | **免安装单文件**：双击即用，卸载 = 删掉这个文件（适合放 U 盘 / 临时用） |
-| `SHA256SUMS.txt` | 校验和（`certutil -hashfile MyBlog_v1.2.0_setup.exe SHA256` 对一下） |
+| `MyBlog_v1.2.1_setup.exe` | **安装版**（NSIS，推荐）：**中文向导** + 许可协议页 + 品牌图标；可选安装目录、建桌面/开始菜单快捷方式、带卸载项；装到用户目录，**不需要管理员权限** |
+| `MyBlog_v1.2.1_portable.exe` | **免安装单文件**：双击即用，卸载 = 删掉这个文件（适合放 U 盘 / 临时用） |
+| `SHA256SUMS.txt` | 校验和（`certutil -hashfile MyBlog_v1.2.1_setup.exe SHA256` 对一下） |
 
 - **系统要求**：Windows 10 / 11（x64）。
 - **首次运行**：会被 Windows SmartScreen 拦一次（exe 未做代码签名）→「更多信息」→「仍要运行」。
