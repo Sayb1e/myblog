@@ -11,9 +11,11 @@ import {
   importOpencode,
   renameSession,
   saveAgentConfig,
+  bindWorkspaceProfile,
+  deleteAgentProfile,
   saveChatHistory,
   streamChat,
-  type AgentConfigView,
+  type AgentView,
   type ChatEvent,
   type ChatMessageRecord,
   type OpencodeAuthView,
@@ -152,9 +154,15 @@ export function ChatView() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [config, setConfig] = useState<AgentConfigView | null>(null);
+  const [config, setConfig] = useState<AgentView | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [opencode, setOpencode] = useState<OpencodeAuthView | null>(null);
+  const [saveTarget, setSaveTarget] = useState("default");
+  const [newProfileName, setNewProfileName] = useState("");
+  const [workspaceBinding, setWorkspaceBinding] = useState("");
+  const [format, setFormat] = useState<"auto" | "openai" | "anthropic">("auto");
+  const [importProvider, setImportProvider] = useState<string | null>(null);
+  const [importModel, setImportModel] = useState("");
   const [baseURL, setBaseURL] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -176,6 +184,15 @@ export function ChatView() {
       setConfig(next);
       setBaseURL(next.baseURL);
       setModel(next.model);
+      setSaveTarget(
+        next.source === "workspace-file"
+          ? "workspace-file"
+          : next.source === "profile"
+            ? `profile:${next.profile}`
+            : "default",
+      );
+      setWorkspaceBinding(next.source === "profile" ? next.profile : "");
+      setFormat(next.source === "env" ? "auto" : next.format);
       if (!next.configured) setSettingsOpen(true);
     } catch (caught) {
       toast("error", errorMessage(caught));
@@ -193,13 +210,14 @@ export function ChatView() {
       .catch(() => setOpencode(null));
   }, [settingsOpen]);
 
-  const importFromOpencode = async (provider: string): Promise<void> => {
+  const importFromOpencode = async (provider: string, model?: string): Promise<void> => {
     try {
-      const result = await importOpencode(provider);
+      const result = await importOpencode(provider, model);
       setBaseURL(result.baseURL);
       setModel(result.model);
       setApiKey("");
-      toast("success", `已从 opencode 导入 ${result.provider}`);
+      setFormat(result.format === "anthropic" ? "anthropic" : result.format === "openai" ? "openai" : "auto");
+      toast("success", `已导入 ${result.provider} / ${result.model}`);
       await loadConfig();
     } catch (caught) {
       toast("error", errorMessage(caught));
@@ -252,12 +270,67 @@ export function ChatView() {
   };
 
   const saveSettings = async (): Promise<void> => {
+    const target =
+      saveTarget === "new-profile"
+        ? "profile"
+        : saveTarget.startsWith("profile:")
+          ? "profile"
+          : saveTarget === "workspace-file"
+            ? "workspace-file"
+            : "default";
+    const profileName =
+      saveTarget === "new-profile"
+        ? newProfileName.trim()
+        : saveTarget.startsWith("profile:")
+          ? saveTarget.slice("profile:".length)
+          : "";
+
+    if (target === "profile" && profileName === "") {
+      toast("error", "先给配置档起个名字");
+      return;
+    }
+
     try {
-      const next = await saveAgentConfig({ baseURL, model, ...(apiKey ? { apiKey } : {}) });
+      const next = await saveAgentConfig({
+        baseURL,
+        model,
+        ...(apiKey ? { apiKey } : {}),
+        format,
+        target,
+        ...(profileName !== "" ? { profile: profileName } : {}),
+      });
       setConfig(next);
       setApiKey("");
-      setSettingsOpen(false);
-      toast("success", "模型配置已保存");
+      if (target === "profile") {
+        setSaveTarget(`profile:${profileName}`);
+        setNewProfileName("");
+      }
+      toast("success", target === "profile" ? `已保存到配置档「${profileName}」` : "已保存");
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
+
+  const changeBinding = async (value: string): Promise<void> => {
+    try {
+      await bindWorkspaceProfile(value);
+      setWorkspaceBinding(value);
+      const next = await getAgentConfig();
+      setConfig(next);
+      toast("success", value === "" ? "已改为继承默认配置" : `本工作区改用配置档「${value}」`);
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
+
+  const removeProfile = async (name: string): Promise<void> => {
+    try {
+      await deleteAgentProfile(name);
+      const next = await getAgentConfig();
+      setConfig(next);
+      setSaveTarget("default");
+      if (workspaceBinding === name) setWorkspaceBinding("");
+      toast("success", `已删除配置档「${name}」`);
     } catch (caught) {
       toast("error", errorMessage(caught));
     }
@@ -463,6 +536,25 @@ export function ChatView() {
 
       {settingsOpen && (
         <div className="card chat-settings">
+          <div className="row chat-settings-head">
+            <span className="chip">
+              当前生效：
+              {config?.source === "env"
+                ? "环境变量"
+                : config?.source === "workspace-file"
+                  ? "工作区文件"
+                  : config?.source === "profile"
+                    ? `配置档「${config.profile}」`
+                    : "默认配置"}
+              （{config?.format === "anthropic" ? "Anthropic" : "OpenAI 兼容"}）
+            </span>
+            {config?.workspaceFile && (
+              <span className="muted chat-settings-file" data-tip={config.workspaceFile}>
+                工作区文件优先：myblog.agent.json
+              </span>
+            )}
+          </div>
+
           <label>
             服务商预设
             <Select
@@ -497,13 +589,105 @@ export function ChatView() {
               placeholder={config?.hasApiKey ? "已保存，留空则不改" : "sk-..."}
             />
           </label>
+
+          <label>
+            API 格式
+            <Select
+              value={format}
+              options={[
+                { value: "auto", label: "自动（按 baseURL / 模型名推断）" },
+                { value: "openai", label: "OpenAI 兼容（/chat/completions）" },
+                { value: "anthropic", label: "Anthropic（/messages，Claude 系）" },
+              ]}
+              onChange={(value) => setFormat(value as "auto" | "openai" | "anthropic")}
+            />
+          </label>
+
+          <label>
+            保存到
+            <Select
+              value={saveTarget}
+              options={[
+                { value: "default", label: "默认（全局配置）" },
+                ...(config?.profiles ?? []).map((name) => ({ value: `profile:${name}`, label: `配置档：${name}` })),
+                { value: "workspace-file", label: "工作区文件 myblog.agent.json" },
+                { value: "new-profile", label: "＋ 新建配置档…" },
+              ]}
+              onChange={setSaveTarget}
+            />
+          </label>
+          {saveTarget === "new-profile" && (
+            <label>
+              配置档名字
+              <input
+                value={newProfileName}
+                onChange={(event) => setNewProfileName(event.target.value)}
+                placeholder="例如：本地 Ollama"
+              />
+            </label>
+          )}
+
+          <label>
+            此工作区使用
+            <Select
+              value={workspaceBinding}
+              options={[
+                { value: "", label: "继承默认配置" },
+                ...(config?.profiles ?? []).map((name) => ({ value: name, label: name })),
+              ]}
+              onChange={(value) => void changeBinding(value)}
+            />
+          </label>
+
           {opencode && opencode.available.length > 0 && (
-            <div className="row opencode-import">
-              <span className="muted">检测到 opencode 登录：</span>
+            <div className="opencode-import">
+              <span className="muted">检测到 opencode 登录（导入后写入「默认配置」）：</span>
               {opencode.available.map((entry) => (
-                <button key={entry.id} type="button" onClick={() => void importFromOpencode(entry.id)}>
-                  导入 {entry.label}
-                </button>
+                <div key={entry.id} className="opencode-provider">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (importProvider === entry.id) {
+                        setImportProvider(null);
+                        return;
+                      }
+                      setImportProvider(entry.id);
+                      setImportModel(entry.model);
+                    }}
+                  >
+                    {entry.label}
+                    {importProvider === entry.id ? " ▲" : " ▼"}
+                  </button>
+                  {importProvider === entry.id && (
+                    <>
+                      <Select
+                        value={importModel}
+                        options={
+                          entry.models.length > 0
+                            ? entry.models.map((option) => ({
+                                value: option.id,
+                                label:
+                                  option.format === "other"
+                                    ? `${option.name}（格式不支持）`
+                                    : option.format === "anthropic"
+                                      ? `${option.name}（Anthropic）`
+                                      : option.name,
+                              }))
+                            : [{ value: entry.model, label: entry.model }]
+                        }
+                        onChange={setImportModel}
+                      />
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={entry.models.some((option) => option.id === importModel && option.format === "other")}
+                        onClick={() => void importFromOpencode(entry.id, importModel)}
+                      >
+                        导入
+                      </button>
+                    </>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -511,6 +695,11 @@ export function ChatView() {
             <button type="button" className="primary" onClick={() => void saveSettings()}>
               保存
             </button>
+            {saveTarget.startsWith("profile:") && (
+              <button type="button" onClick={() => void removeProfile(saveTarget.slice("profile:".length))}>
+                删除该配置档
+              </button>
+            )}
             <span className="muted">Key 只存在本地，不会下发到页面。</span>
           </div>
           {config && <p className="muted">配置文件：{config.configPath}</p>}

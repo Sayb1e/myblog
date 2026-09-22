@@ -9,6 +9,7 @@ import type {
 import type {
   AgentConfigView,
   AgentEvent,
+  AgentView,
   ApiMethod,
   ApiPayload,
   ApiResult,
@@ -28,6 +29,8 @@ import type {
 export type {
   AgentConfigView,
   AgentEvent as ChatEvent,
+  AgentProfile,
+  AgentView,
   FileContent,
   FileEntry,
   FileListing,
@@ -45,6 +48,7 @@ export type {
 export interface WorkspaceList {
   active: string;
   list: string[];
+  names: Record<string, string>;
 }
 
 function bridge(): MyBlogApiBridge {
@@ -80,13 +84,23 @@ export const scaffoldDay = (date: string): Promise<{ created: boolean; path: str
 export const closeDay = (payload: CloseDayInput & { dryRun?: boolean }): Promise<CloseDayResult> =>
   call("close", payload);
 
-export const getAgentConfig = (): Promise<AgentConfigView> => call("agent");
+export const getAgentConfig = (): Promise<AgentView> => call("agent");
 
 export const saveAgentConfig = (patch: {
   baseURL?: string;
   model?: string;
   apiKey?: string;
-}): Promise<AgentConfigView> => call("saveAgent", patch);
+  format?: "openai" | "anthropic" | "auto";
+  maxTokens?: number;
+  target?: "default" | "profile" | "workspace-file";
+  profile?: string;
+}): Promise<AgentView> => call("saveAgent", patch);
+
+export const bindWorkspaceProfile = (profile: string): Promise<{ bound: string }> =>
+  call("bindWorkspaceProfile", { profile });
+
+export const deleteAgentProfile = (profile: string): Promise<{ ok: boolean }> =>
+  call("deleteProfile", { profile });
 
 export const getStorage = (): Promise<StorageView> => call("storage");
 
@@ -101,14 +115,23 @@ export const switchWorkspace = (path: string): Promise<WorkspaceList> => call("s
 
 export const addWorkspace = (path: string): Promise<WorkspaceList> => call("addWorkspace", { path });
 
+export const renameWorkspace = (path: string, name: string): Promise<WorkspaceList> =>
+  call("renameWorkspace", { path, name });
+
+export const removeWorkspace = (path: string): Promise<WorkspaceList> => call("removeWorkspace", { path });
+
 export const initWorkspace = (): Promise<{ created: string[] }> => call("init");
 
 export const getOpencodeAuth = (): Promise<OpencodeAuthView> => call("opencodeAuth");
 
 export const importOpencode = (
   provider?: string,
-): Promise<{ ok: boolean; provider: string; baseURL: string; model: string }> =>
-  call("importOpencode", provider === undefined ? undefined : { provider });
+  model?: string,
+): Promise<{ ok: boolean; provider: string; baseURL: string; model: string; format: string }> =>
+  call("importOpencode", {
+    ...(provider === undefined ? {} : { provider }),
+    ...(model === undefined || model === "" ? {} : { model }),
+  });
 
 export const listFiles = (path?: string): Promise<FileListing> =>
   call("files", path === undefined || path === "" ? undefined : { path });

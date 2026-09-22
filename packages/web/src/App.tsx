@@ -7,6 +7,8 @@ import {
   getGit,
   getWorkspaces,
   initWorkspace,
+  removeWorkspace,
+  renameWorkspace,
   switchWorkspace,
   type GitState,
   type WorkspaceList,
@@ -18,6 +20,7 @@ import { CommandPalette, type Command } from "./components/CommandPalette.js";
 import { DailyView } from "./components/DailyView.js";
 import { FilesView } from "./components/FilesView.js";
 import { GitCard } from "./components/GitCard.js";
+import { IconPencil, IconTrash } from "./components/icons.js";
 import { MarkdownProvider } from "./components/Markdown.js";
 import { ProgressCard } from "./components/ProgressCard.js";
 import { SettingsView } from "./components/SettingsView.js";
@@ -58,6 +61,10 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<WorkspaceList | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [manageEditing, setManageEditing] = useState<string | null>(null);
+  const [manageValue, setManageValue] = useState("");
+  const [manageRemoving, setManageRemoving] = useState<string | null>(null);
   const [visited, setVisited] = useState<Partial<Record<View, boolean>>>({ overview: true });
 
   useEffect(() => {
@@ -160,16 +167,43 @@ export function App() {
     }
   };
 
-  const workspaceOptions = useMemo<SelectOption[]>(() => {    const list = workspaces?.list ?? [];
-    const options = list.map((entry) => ({
-      value: entry,
-      label: entry.split(/[\\/]/).filter(Boolean).pop() ?? entry,
-    }));
+  const workspaceName = (entry: string): string =>
+    workspaces?.names?.[entry] ?? entry.split(/[\\/]/).filter(Boolean).pop() ?? entry;
+
+  const workspaceOptions = useMemo<SelectOption[]>(() => {
+    const list = workspaces?.list ?? [];
+    const options = list.map((entry) => ({ value: entry, label: workspaceName(entry) }));
     if (status?.root && !list.includes(status.root)) {
-      options.unshift({ value: status.root, label: workspace || status.root });
+      options.unshift({ value: status.root, label: workspaceName(status.root) });
     }
     return options;
   }, [workspaces, status?.root, workspace]);
+
+  const saveWorkspaceName = async (): Promise<void> => {
+    if (!manageEditing) return;
+    try {
+      const next = await renameWorkspace(manageEditing, manageValue);
+      setWorkspaces(next);
+      setManageEditing(null);
+      toast("success", manageValue.trim() === "" ? "已恢复默认名字" : "已重命名工作区");
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
+
+  const confirmRemoveWorkspace = async (): Promise<void> => {
+    if (!manageRemoving) return;
+    try {
+      const wasActive = manageRemoving === workspaces?.active;
+      const next = await removeWorkspace(manageRemoving);
+      setWorkspaces(next);
+      setManageRemoving(null);
+      toast("success", "已从列表移除（磁盘文件未动）");
+      if (wasActive) window.location.reload();
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
 
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [
@@ -261,6 +295,7 @@ export function App() {
         workspaceOptions={workspaceOptions}
         onSwitchWorkspace={(target) => void changeWorkspace(target)}
         onAddWorkspace={() => void addWorkspaceFolder()}
+        onManageWorkspaces={() => setManageOpen(true)}
       />
 
       <main className="main">
@@ -372,6 +407,113 @@ export function App() {
         )}
         </div>
       </main>
+
+      {manageOpen && (
+        <div
+          className="palette-overlay"
+          onClick={() => {
+            setManageOpen(false);
+            setManageEditing(null);
+            setManageRemoving(null);
+          }}
+        >
+          <div className="palette dialog ws-manage" onClick={(event) => event.stopPropagation()}>
+            <div className="palette-input">
+              <strong>管理工作区</strong>
+            </div>
+            <div className="dialog-body">
+              <ul className="ws-manage-list">
+                {(workspaces?.list ?? []).map((entry) => (
+                  <li key={entry} className="ws-manage-row">
+                    {manageEditing === entry ? (
+                      <input
+                        autoFocus
+                        value={manageValue}
+                        placeholder={workspaceName(entry)}
+                        onChange={(event) => setManageValue(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") void saveWorkspaceName();
+                          if (event.key === "Escape") setManageEditing(null);
+                        }}
+                      />
+                    ) : (
+                      <span className="ws-manage-text">
+                        <span className="ws-manage-name">
+                          {workspaceName(entry)}
+                          {entry === workspaces?.active && <span className="chip">当前</span>}
+                        </span>
+                        <span className="muted ws-manage-path">{entry}</span>
+                      </span>
+                    )}
+                    <span className="ws-manage-actions">
+                      {manageEditing === entry ? (
+                        <>
+                          <button type="button" className="primary btn-sm" onClick={() => void saveWorkspaceName()}>
+                            保存
+                          </button>
+                          <button type="button" className="btn-sm" onClick={() => setManageEditing(null)}>
+                            取消
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="ghost icon-btn sm"
+                            aria-label="重命名"
+                            data-tip="重命名"
+                            onClick={() => {
+                              setManageEditing(entry);
+                              setManageValue(workspaces?.names?.[entry] ?? "");
+                            }}
+                          >
+                            <IconPencil />
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost icon-btn sm"
+                            aria-label="从列表移除"
+                            data-tip="从列表移除（不删文件）"
+                            disabled={(workspaces?.list.length ?? 0) <= 1}
+                            onClick={() => setManageRemoving(entry)}
+                          >
+                            <IconTrash />
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {manageRemoving && (
+                <div className="ws-manage-confirm">
+                  <p className="muted">
+                    从列表移除「{workspaceName(manageRemoving)}」？只取消登记，<strong>不会删除</strong>磁盘上的文件。
+                  </p>
+                  <div className="row">
+                    <button type="button" className="primary danger" onClick={() => void confirmRemoveWorkspace()}>
+                      移除
+                    </button>
+                    <button type="button" onClick={() => setManageRemoving(null)}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="row">
+                <button type="button" onClick={() => void addWorkspaceFolder()}>
+                  添加工作区…
+                </button>
+                <button type="button" onClick={() => setManageOpen(false)}>
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CommandPalette
         open={paletteOpen}

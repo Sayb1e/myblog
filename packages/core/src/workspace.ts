@@ -129,7 +129,14 @@ export class Workspace {
 
   async initWorkspace(): Promise<{ created: string[] }> {
     const created: string[] = [];
-    await mkdir(this.config.root, { recursive: true });
+    if (!(await pathExists(this.config.root))) {
+      try {
+        await mkdir(this.config.root, { recursive: true });
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "EPERM" && code !== "EACCES" && code !== "EEXIST") throw error;
+      }
+    }
     if (!(await pathExists(this.overviewPath))) {
       await writeFile(this.overviewPath, scaffoldOverview(), "utf8");
       created.push(this.config.overview);

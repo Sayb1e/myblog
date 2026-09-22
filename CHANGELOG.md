@@ -3,6 +3,36 @@
 本项目的用户可见改动都记录在这里。**1.x 起为正式版本**（此前的 0.x 为测试/预发布阶段）。
 桌面打包后，本文件会自动复制到 `packages/desktop/release/`，与 exe 放在一起。
 
+## [1.2.3] - 2026-09-22
+
+### 新增
+
+- **对话历史目录可读化 + 可迁移**：历史目录从纯哈希（`3c7afcafa7673ad1`）改成 **`<别名或文件夹名>-<短哈希>`**（如 `手机逆向-3c7afcaf`），并在目录里写入 `workspace.json`（记录原始路径、别名、更新时间）。旧哈希目录首次访问时自动改名迁移；**改了工作区别名也会自动改名目录并保住会话**；最早的 `<哈希>.json` 单文件历史也会自动搬进新结构。
+- **Anthropic 格式支持**：`packages/agent` 新增 Anthropic Messages provider（`/messages`、`x-api-key`、`anthropic-version`、SSE `content_block_delta` / `tool_use` 解析、`tool_result` 合并）。对话设置里新增「API 格式：自动 / OpenAI 兼容 / Anthropic」，默认按 baseURL 与模型名推断（`claude*` → Anthropic）。
+- **opencode 网关修复与模型选择**：「导入 opencode」现在会读 `~/.cache/opencode/models.json` **列出该网关的模型**（标注 Anthropic / 格式不支持），可指定模型导入并自动带上正确的格式；对 opencode 网关的请求会**自动补 `x-opencode-session` 头**（Go 网关没有这个头会 400）。
+- **每个工作区可以单独指定模型**（对话 → 设置）：
+  - 「保存到」：默认（全局配置）/ 命名**配置档** / **工作区文件** `myblog.agent.json` / ＋新建配置档；
+  - 「此工作区使用」：继承默认，或绑定某个配置档；
+  - **生效优先级**：环境变量 `MYBLOG_AGENT_*` → 工作区里的 `myblog.agent.json` → 绑定的配置档 → 默认配置；设置面板顶部显示「当前生效」来源。
+  - 配置档存在 `settings.json` 的 `profiles`，绑定关系在 `workspaceProfiles`；删配置档会同时解除绑定。
+
+### 修复
+
+- **修 `EPERM: operation not permitted, mkdir 'D:\'`**：根因是「设置 → 存储」里的模型配置被填成了**目录**（如 `D:\Work`），写配置时 `mkdir(dirname(...))` 变成 `mkdir('D:\')`。现在：
+  - 保存时校验：模型配置必须是**文件**路径（拒绝目录、拒绝盘符根目录），历史目录必须是**目录**（拒绝文件、拒绝盘符根目录），并且报错信息直接说清该怎么填；
+  - 写模型配置、初始化工作区时先判断目录是否存在，容忍 `EPERM/EACCES`，盘符根不会再炸。
+- 「设置 → 存储」两处说明补上「要填文件还是目录」的例子。
+
+## [1.2.2] - 2026-09-22
+
+### 新增
+
+- **工作区管理**：侧栏工作区下拉新增「管理工作区…」，可以
+  - **重命名**（给工作区起别名，侧栏与下拉都显示别名，留空则恢复文件夹名）；
+  - **从列表移除**（只取消登记，**不会删除磁盘文件**；移除当前工作区会自动切到剩下的一个；至少保留一个）。
+  - 别名与工作区列表一起存在 `settings.json` 的 `names` 字段（旧配置无该字段也能正常读）。
+  - 对应的 handler：`renameWorkspace` / `removeWorkspace`，`workspaces()` 返回值新增 `names`。
+
 ## [1.2.1] - 2026-09-22
 
 ### 新增

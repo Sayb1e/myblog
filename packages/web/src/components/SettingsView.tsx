@@ -257,7 +257,10 @@ export function SettingsView({ root, version }: Props) {
             </div>
             <div className="setting-field">
               <strong>模型配置文件</strong>
-              <p className="muted">对话使用的 provider / key 配置（agent.json）。改到别处后，旧文件不会被自动搬移。</p>
+              <p className="muted">
+                要填一个<b>文件</b>路径，例如 <code className="code">D:\Work\myblog-agent.json</code>；不能填目录，也不能填盘符根目录（例如
+                <code className="code">D:\</code>）。单个工作区想用不同模型，见「对话 → 设置」里的配置档 / 工作区文件。
+              </p>
               <div className="path-input">
                 <input value={agentPath} onChange={(event) => setAgentPath(event.target.value)} spellCheck={false} />
                 {canPick && (
@@ -269,7 +272,9 @@ export function SettingsView({ root, version }: Props) {
             </div>
             <div className="setting-field">
               <strong>对话历史目录</strong>
-              <p className="muted">按工作区在该目录下各存一个 JSON 文件。</p>
+              <p className="muted">
+                要填一个<b>目录</b>路径（每个工作区在这里各存一份历史），不能填文件或盘符根目录。改到别处后，旧目录不会被自动搬移。
+              </p>
               <div className="path-input">
                 <input value={historyPath} onChange={(event) => setHistoryPath(event.target.value)} spellCheck={false} />
                 {canPick && (

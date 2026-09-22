@@ -10,6 +10,7 @@ import {
   IconFolderOpen,
   IconOverview,
   IconSettings,
+  IconSliders,
   IconTerminal,
   IconWrench,
 } from "./icons.js";
@@ -25,6 +26,7 @@ interface Props {
   workspaceOptions: SelectOption[];
   onSwitchWorkspace: (path: string) => void;
   onAddWorkspace: () => void;
+  onManageWorkspaces: () => void;
 }
 
 interface Item {
@@ -43,6 +45,7 @@ export function Sidebar({
   workspaceOptions,
   onSwitchWorkspace,
   onAddWorkspace,
+  onManageWorkspaces,
 }: Props) {
   const { prefs, setPref } = usePrefs();
   const hasTerminal = typeof window !== "undefined" && Boolean(window.myblog?.terminal);
@@ -96,7 +99,10 @@ export function Sidebar({
             title={root}
             placement="up"
             icon={<IconWrench />}
-            action={{ label: "添加工作区…", icon: <IconFolder />, onSelect: onAddWorkspace }}
+            actions={[
+              { label: "添加工作区…", icon: <IconFolder />, onSelect: onAddWorkspace },
+              { label: "管理工作区…", icon: <IconSliders />, onSelect: onManageWorkspaces },
+            ]}
           />
         </div>
         <button

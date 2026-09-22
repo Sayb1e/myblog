@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -38,13 +38,20 @@ interface MessagesFile {
   messages?: StoredMessage[];
 }
 
+interface WorkspaceManifest {
+  root: string;
+  label: string;
+  updatedAt: string;
+}
+
+const MANIFEST_FILE = "workspace.json";
+
 export function defaultHistoryDir(): string {
   return path.join(homedir(), ".myblog", "history");
 }
 
-function sessionDirFor(root: string, historyDir: string): string {
-  const id = createHash("sha1").update(root).digest("hex").slice(0, 16);
-  return path.join(historyDir, id);
+function hashOf(root: string, length: number): string {
+  return createHash("sha1").update(root).digest("hex").slice(0, length);
 }
 
 function indexPath(dir: string): string {
@@ -104,6 +111,78 @@ async function writeJson(file: string, value: unknown): Promise<void> {
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
+async function isFile(file: string): Promise<boolean> {
+  try {
+    return (await stat(file)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function subDirs(dir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+async function writeManifest(dir: string, root: string, label?: string): Promise<void> {
+  const manifest: WorkspaceManifest = { root, label: label ?? "", updatedAt: new Date().toISOString() };
+  await writeJson(path.join(dir, MANIFEST_FILE), manifest);
+}
+
+/**
+ * 解析某个工作区的历史目录：
+ * - 目录名可读：`<别名或文件夹名>-<短哈希>`（例如 `手机逆向-3c7afcaf`）
+ * - 旧版纯哈希目录会自动改名迁移
+ * - 通过 `workspace.json` 认领：别名改了也能找到原历史并顺手改名
+ */
+async function resolveDir(root: string, historyDir: string, label?: string): Promise<string> {
+  const readableBase = (label ?? "").trim() !== "" ? (label as string).trim() : path.basename(root) || "workspace";
+  const readableName = `${sanitize(readableBase)}-${hashOf(root, 8)}`;
+  const readableDir = path.join(historyDir, readableName);
+  const legacyDir = path.join(historyDir, hashOf(root, 16));
+
+  const adopt = async (dir: string): Promise<string> => {
+    if (dir !== readableDir) {
+      try {
+        if (await isFile(indexPath(readableDir))) {
+          // 目标已存在（罕见）：直接用目标
+          await writeManifest(readableDir, root, label);
+          return readableDir;
+        }
+        await rename(dir, readableDir);
+        await writeManifest(readableDir, root, label);
+        return readableDir;
+      } catch {
+        await writeManifest(dir, root, label);
+        return dir;
+      }
+    }
+    await writeManifest(dir, root, label);
+    return dir;
+  };
+
+  if (await isFile(indexPath(readableDir))) {
+    await writeManifest(readableDir, root, label);
+    return readableDir;
+  }
+
+  if (await isFile(indexPath(legacyDir))) return adopt(legacyDir);
+
+  for (const name of await subDirs(historyDir)) {
+    const dir = path.join(historyDir, name);
+    if (!(await isFile(indexPath(dir)))) continue;
+    const manifest = await readJson<WorkspaceManifest>(path.join(dir, MANIFEST_FILE));
+    if (manifest?.root === root) return adopt(dir);
+  }
+
+  await writeManifest(readableDir, root, label);
+  return readableDir;
+}
+
 async function saveIndex(dir: string, index: SessionIndex): Promise<void> {
   await writeJson(indexPath(dir), index);
 }
@@ -122,8 +201,8 @@ async function migrateFolderLayout(dir: string, index: SessionIndex, loose: (Ses
   }
 }
 
-async function loadIndex(root: string, historyDir: string): Promise<{ dir: string; index: SessionIndex }> {
-  const dir = sessionDirFor(root, historyDir);
+async function loadIndex(root: string, historyDir: string, label?: string): Promise<{ dir: string; index: SessionIndex }> {
+  const dir = await resolveDir(root, historyDir, label);
   const raw = await readJson<LooseIndex>(indexPath(dir));
 
   if (raw && Array.isArray(raw.sessions) && raw.sessions.length > 0) {
@@ -140,8 +219,8 @@ async function loadIndex(root: string, historyDir: string): Promise<{ dir: strin
     return { dir, index };
   }
 
-  // 迁移最早的「单文件历史」：<historyDir>/<hash>.json
-  const legacyFile = path.join(historyDir, `${path.basename(dir)}.json`);
+  // 迁移最早的「单文件历史」：<historyDir>/<hash16>.json
+  const legacyFile = path.join(historyDir, `${hashOf(root, 16)}.json`);
   const legacy = await readJson<{ messages?: StoredMessage[]; updatedAt?: string }>(legacyFile);
   const now = new Date().toISOString();
   const messages = Array.isArray(legacy?.messages) ? legacy.messages : [];
@@ -163,8 +242,9 @@ async function loadIndex(root: string, historyDir: string): Promise<{ dir: strin
 export async function listSessions(
   root: string,
   historyDir: string,
+  label?: string,
 ): Promise<{ active: string; sessions: SessionMeta[] }> {
-  const { index } = await loadIndex(root, historyDir);
+  const { index } = await loadIndex(root, historyDir, label);
   return { active: index.active, sessions: index.sessions };
 }
 
@@ -172,8 +252,9 @@ export async function createSession(
   root: string,
   historyDir: string,
   title?: string,
+  label?: string,
 ): Promise<{ active: string; sessions: SessionMeta[]; session: SessionMeta }> {
-  const { dir, index } = await loadIndex(root, historyDir);
+  const { dir, index } = await loadIndex(root, historyDir, label);
   const now = new Date().toISOString();
   const finalTitle = title?.trim() || nextTitle(index.sessions);
   const meta: SessionMeta = {
@@ -195,8 +276,9 @@ export async function renameSession(
   historyDir: string,
   id: string,
   title: string,
+  label?: string,
 ): Promise<{ active: string; sessions: SessionMeta[] }> {
-  const { dir, index } = await loadIndex(root, historyDir);
+  const { dir, index } = await loadIndex(root, historyDir, label);
   const session = index.sessions.find((entry) => entry.id === id);
   const clean = title.trim();
   if (!session || clean === "") return { active: index.active, sessions: index.sessions };
@@ -222,8 +304,9 @@ export async function activateSession(
   root: string,
   historyDir: string,
   id: string,
+  label?: string,
 ): Promise<{ active: string; sessions: SessionMeta[] }> {
-  const { dir, index } = await loadIndex(root, historyDir);
+  const { dir, index } = await loadIndex(root, historyDir, label);
   if (index.sessions.some((session) => session.id === id)) {
     index.active = id;
     await saveIndex(dir, index);
@@ -235,8 +318,9 @@ export async function deleteSession(
   root: string,
   historyDir: string,
   id: string,
+  label?: string,
 ): Promise<{ active: string; sessions: SessionMeta[] }> {
-  const { dir, index } = await loadIndex(root, historyDir);
+  const { dir, index } = await loadIndex(root, historyDir, label);
   const session = index.sessions.find((entry) => entry.id === id);
   if (session) await rm(path.join(dir, session.folder), { recursive: true, force: true });
   index.sessions = index.sessions.filter((entry) => entry.id !== id);
@@ -258,16 +342,22 @@ export async function deleteSession(
 export async function readActive(
   root: string,
   historyDir: string,
+  label?: string,
 ): Promise<{ session: SessionMeta | null; messages: StoredMessage[] }> {
-  const { dir, index } = await loadIndex(root, historyDir);
+  const { dir, index } = await loadIndex(root, historyDir, label);
   const session = index.sessions.find((entry) => entry.id === index.active) ?? null;
   if (!session) return { session: null, messages: [] };
   const data = await readJson<MessagesFile>(messagesPath(dir, session.folder));
   return { session, messages: Array.isArray(data?.messages) ? data.messages : [] };
 }
 
-export async function writeActive(root: string, historyDir: string, messages: StoredMessage[]): Promise<void> {
-  const { dir, index } = await loadIndex(root, historyDir);
+export async function writeActive(
+  root: string,
+  historyDir: string,
+  messages: StoredMessage[],
+  label?: string,
+): Promise<void> {
+  const { dir, index } = await loadIndex(root, historyDir, label);
   const session = index.sessions.find((entry) => entry.id === index.active);
   if (!session) return;
   const trimmed = messages.slice(-200);

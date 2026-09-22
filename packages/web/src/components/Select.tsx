@@ -6,6 +6,12 @@ export interface SelectOption {
   label: string;
 }
 
+export interface SelectAction {
+  label: string;
+  icon?: ReactNode;
+  onSelect: () => void;
+}
+
 interface Props {
   value: string;
   options: SelectOption[];
@@ -15,7 +21,8 @@ interface Props {
   title?: string;
   placement?: "down" | "up";
   icon?: ReactNode;
-  action?: { label: string; icon?: ReactNode; onSelect: () => void };
+  action?: SelectAction;
+  actions?: SelectAction[];
 }
 
 export function Select({
@@ -28,10 +35,12 @@ export function Select({
   placement = "down",
   icon,
   action,
+  actions,
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const current = options.find((option) => option.value === value);
+  const extras = actions ?? (action ? [action] : []);
 
   useEffect(() => {
     if (!open) return;
@@ -77,20 +86,23 @@ export function Select({
               {option.label}
             </button>
           ))}
-          {action && (
+          {extras.length > 0 && (
             <>
               <div className="select-divider" />
-              <button
-                type="button"
-                className="select-option select-action"
-                onClick={() => {
-                  setOpen(false);
-                  action.onSelect();
-                }}
-              >
-                {action.icon}
-                {action.label}
-              </button>
+              {extras.map((entry) => (
+                <button
+                  key={entry.label}
+                  type="button"
+                  className="select-option select-action"
+                  onClick={() => {
+                    setOpen(false);
+                    entry.onSelect();
+                  }}
+                >
+                  {entry.icon}
+                  {entry.label}
+                </button>
+              ))}
             </>
           )}
         </div>

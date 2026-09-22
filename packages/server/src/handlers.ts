@@ -4,15 +4,18 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
+  DEFAULT_MAX_TOKENS,
   LIST_LIMIT,
   READ_LIMIT,
   SKIP_DIRS,
+  inferFormat,
   isBinary,
+  loadAgentConfig,
   resolveInside,
   runAgent,
   saveAgentConfig,
   toRelative,
-  viewAgentConfig,
+  type AgentConfig,
   type AgentConfigView,
   type AgentEvent,
 } from "@myblog/agent";
@@ -42,9 +45,17 @@ import {
   type SessionMeta,
   type StoredMessage,
 } from "./history.js";
-import { defaultStorageSettings, readStorage, writeStorage, type StorageSettings } from "./storage.js";
+import {
+  defaultStorageSettings,
+  readStorage,
+  writeStorage,
+  type AgentProfile,
+  type StorageSettings,
+} from "./storage.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const WORKSPACE_AGENT_FILE = "myblog.agent.json";
 
 const exec = promisify(execFile);
 
@@ -71,8 +82,8 @@ interface OpencodeProvider {
 }
 
 const OPENCODE_PROVIDERS: OpencodeProvider[] = [
-  { id: "opencode-go", label: "OpenCode Go", baseURL: "https://opencode.ai/zen/go/v1", model: "grok-4.6" },
-  { id: "opencode", label: "OpenCode Zen", baseURL: "https://opencode.ai/zen/v1", model: "grok-code" },
+  { id: "opencode-go", label: "OpenCode Go", baseURL: "https://opencode.ai/zen/go/v1", model: "deepseek-v4-flash" },
+  { id: "opencode", label: "OpenCode Zen", baseURL: "https://opencode.ai/zen/v1", model: "glm-4.7" },
 ];
 
 function opencodeAuthFile(explicit?: string): string {
@@ -80,6 +91,84 @@ function opencodeAuthFile(explicit?: string): string {
   const home = process.env.USERPROFILE ?? process.env.HOME ?? "";
   const xdg = process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share");
   return path.join(xdg, "opencode", "auth.json");
+}
+
+function opencodeModelsFile(explicit?: string): string {
+  if (explicit) return explicit;
+  const home = process.env.USERPROFILE ?? process.env.HOME ?? "";
+  const xdg = process.env.XDG_CACHE_HOME ?? path.join(home, ".cache");
+  return path.join(xdg, "opencode", "models.json");
+}
+
+function classifyOpencodeFormat(npm: unknown): OpencodeModel["format"] {
+  if (npm === "@ai-sdk/anthropic") return "anthropic";
+  if (npm === "@ai-sdk/openai-compatible" || npm === "@ai-sdk/openai") return "openai";
+  return "other";
+}
+
+/** 读 opencode 的模型清单（models.json），标注每个模型需要的协议格式 */
+async function readOpencodeModels(modelsFile: string, providerId: string): Promise<OpencodeModel[]> {
+  try {
+    const raw = JSON.parse(await readFile(modelsFile, "utf8")) as {
+      providers?: Record<string, { npm?: string; models?: Record<string, { name?: string; provider?: { npm?: string } }> }>;
+    };
+    const provider = (raw.providers ?? {})[providerId];
+    if (!provider?.models) return [];
+    return Object.entries(provider.models)
+      .map(([id, model]) => ({
+        id,
+        name: model?.name ?? id,
+        format: classifyOpencodeFormat(model?.provider?.npm ?? provider.npm),
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
+  } catch {
+    return [];
+  }
+}
+
+function workspaceAgentFile(root: string): string {
+  return path.join(root, WORKSPACE_AGENT_FILE);
+}
+
+function asProfile(raw: unknown): AgentProfile | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Partial<AgentProfile>;
+  if (typeof value.baseURL !== "string" || typeof value.model !== "string") return null;
+  if (value.baseURL === "" || value.model === "") return null;
+  const profile: AgentProfile = { baseURL: value.baseURL, model: value.model };
+  if (typeof value.apiKey === "string" && value.apiKey !== "") profile.apiKey = value.apiKey;
+  if (typeof value.temperature === "number") profile.temperature = value.temperature;
+  return profile;
+}
+
+async function readWorkspaceAgentFile(root: string): Promise<AgentProfile | null> {
+  try {
+    return asProfile(JSON.parse(await readFile(workspaceAgentFile(root), "utf8")));
+  } catch {
+    return null;
+  }
+}
+
+async function assertWritableConfigFile(input: string): Promise<void> {
+  const resolved = path.resolve(input);
+  if (path.parse(resolved).root === resolved) {
+    throw new Error("模型配置要填一个文件路径（例如 D:\\Work\\myblog-agent.json），不能是盘符根目录");
+  }
+  const info = await stat(resolved).catch(() => null);
+  if (info?.isDirectory()) {
+    throw new Error("模型配置要填文件路径，不要填目录（例如 D:\\Work\\myblog-agent.json）");
+  }
+}
+
+async function assertWritableHistoryDir(input: string): Promise<void> {
+  const resolved = path.resolve(input);
+  if (path.parse(resolved).root === resolved) {
+    throw new Error("对话历史目录不能是盘符根目录，请选一个文件夹（例如 D:\\Work\\myblog-history）");
+  }
+  const info = await stat(resolved).catch(() => null);
+  if (info && !info.isDirectory()) {
+    throw new Error("对话历史要填目录路径，不能是文件");
+  }
 }
 
 const require = createRequire(import.meta.url);
@@ -94,6 +183,7 @@ export interface StatusResponse extends WorkspaceStatus {
 export interface WorkspaceList {
   active: string;
   list: string[];
+  names: Record<string, string>;
 }
 
 export interface SessionList {
@@ -105,12 +195,20 @@ export interface StorageView extends StorageSettings {
   defaults: StorageSettings;
 }
 
+export interface AgentView extends AgentConfigView {
+  source: "env" | "workspace-file" | "profile" | "default";
+  profile: string;
+  profiles: string[];
+  workspaceFile: string;
+}
+
 export interface ApiOptions {
   root: string;
   agentConfigPath?: string;
   historyDir?: string;
   workspaces?: string[];
   opencodeAuthPath?: string;
+  opencodeModelsPath?: string;
   onRootChange?: (root: string) => void;
 }
 
@@ -158,7 +256,15 @@ export interface GitState {
 
 export interface OpencodeAuthView {
   file: string;
-  available: OpencodeProvider[];
+  modelsFile: string;
+  available: (OpencodeProvider & { models: OpencodeModel[] })[];
+}
+
+export interface OpencodeModel {
+  id: string;
+  name: string;
+  /** 该模型在这个网关上需要的协议格式 */
+  format: "openai" | "anthropic" | "other";
 }
 
 export interface MyBlogHandlers {
@@ -167,6 +273,8 @@ export interface MyBlogHandlers {
   workspaces: () => Promise<WorkspaceList>;
   addWorkspace: (payload: { path: string }) => Promise<WorkspaceList>;
   setWorkspace: (payload: { path: string }) => Promise<WorkspaceList>;
+  renameWorkspace: (payload: { path: string; name: string }) => Promise<WorkspaceList>;
+  removeWorkspace: (payload: { path: string }) => Promise<WorkspaceList>;
   check: () => Promise<CheckResult>;
   today: () => Promise<TodayPlan>;
   summaries: () => Promise<SummaryDoc[]>;
@@ -182,9 +290,26 @@ export interface MyBlogHandlers {
   git: () => Promise<GitState>;
   gitCommit: (payload: { message: string }) => Promise<{ ok: true; output: string }>;
   opencodeAuth: () => Promise<OpencodeAuthView>;
-  importOpencode: (payload?: { provider?: string }) => Promise<{ ok: true; provider: string; baseURL: string; model: string }>;
-  agent: () => Promise<AgentConfigView>;
-  saveAgent: (payload: { baseURL?: string; model?: string; apiKey?: string; temperature?: number }) => Promise<AgentConfigView>;
+  importOpencode: (payload?: { provider?: string; model?: string }) => Promise<{
+    ok: true;
+    provider: string;
+    baseURL: string;
+    model: string;
+    format: string;
+  }>;
+  agent: () => Promise<AgentView>;
+  saveAgent: (payload: {
+    baseURL?: string;
+    model?: string;
+    apiKey?: string;
+    temperature?: number;
+    format?: "openai" | "anthropic" | "auto";
+    maxTokens?: number;
+    target?: "default" | "profile" | "workspace-file";
+    profile?: string;
+  }) => Promise<AgentView>;
+  bindWorkspaceProfile: (payload: { profile?: string }) => Promise<{ bound: string }>;
+  deleteProfile: (payload: { profile: string }) => Promise<{ ok: true }>;
   storage: () => Promise<StorageView>;
   saveStorage: (payload: { agentConfigPath?: string; historyDir?: string }) => Promise<StorageView>;
   sessions: () => Promise<SessionList>;
@@ -258,9 +383,93 @@ export function createApi(options: ApiOptions): MyBlogApi {
           : current.historyDir,
       workspaces: current.workspaces,
       activeWorkspace: current.activeWorkspace,
+      names: current.names,
+      profiles: current.profiles,
+      workspaceProfiles: current.workspaceProfiles,
     };
     await persist(next);
     return next;
+  };
+
+  const buildAgentView = (
+    config: AgentProfile | AgentConfig,
+    source: AgentView["source"],
+    configPath: string,
+    extras: { profile?: string; profiles?: string[]; workspaceFile?: string } = {},
+  ): AgentView => ({
+    configured: config.baseURL !== "" && config.model !== "",
+    baseURL: config.baseURL,
+    model: config.model,
+    hasApiKey: Boolean(config.apiKey),
+    configPath,
+    format: inferFormat(config),
+    maxTokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
+    source,
+    profile: extras.profile ?? "",
+    profiles: extras.profiles ?? [],
+    workspaceFile: extras.workspaceFile ?? "",
+  });
+
+  const toAgentConfig = (profile: AgentProfile): AgentConfig => {
+    const config: AgentConfig = { baseURL: profile.baseURL, model: profile.model, apiKey: profile.apiKey ?? "" };
+    if (profile.temperature !== undefined) config.temperature = profile.temperature;
+    if (profile.format !== undefined) config.format = profile.format;
+    if (profile.maxTokens !== undefined) config.maxTokens = profile.maxTokens;
+    return config;
+  };
+
+  const resolveAgent = async (): Promise<{
+    config: AgentConfig;
+    view: AgentView;
+  }> => {
+    const workspace = await get();
+    const storage = await getStorage();
+    const profiles = Object.keys(storage.profiles);
+    const workspaceFile = workspaceAgentFile(workspace.root);
+
+    const envBase = process.env.MYBLOG_AGENT_BASE_URL;
+    const envModel = process.env.MYBLOG_AGENT_MODEL;
+    if (envBase && envModel) {
+      const config: AgentConfig = { baseURL: envBase, model: envModel, apiKey: process.env.MYBLOG_AGENT_API_KEY ?? "" };
+      const envFormat = process.env.MYBLOG_AGENT_FORMAT;
+      if (envFormat === "openai" || envFormat === "anthropic") config.format = envFormat;
+      return { config, view: buildAgentView(config, "env", "（环境变量 MYBLOG_AGENT_*）", { profiles, workspaceFile }) };
+    }
+
+    const fromFile = await readWorkspaceAgentFile(workspace.root);
+    if (fromFile) {
+      return {
+        config: toAgentConfig(fromFile),
+        view: buildAgentView(fromFile, "workspace-file", workspaceFile, { profiles, workspaceFile }),
+      };
+    }
+
+    const bound = storage.workspaceProfiles[workspace.root];
+    if (bound) {
+      const profile = storage.profiles[bound];
+      if (profile) {
+        return {
+          config: toAgentConfig(profile),
+          view: buildAgentView(profile, "profile", `${storage.agentConfigPath} → ${bound}`, {
+            profile: bound,
+            profiles,
+            workspaceFile,
+          }),
+        };
+      }
+    }
+
+    const fallback = (await loadAgentConfig(storage.agentConfigPath)) ?? { baseURL: "", model: "", apiKey: "" };
+    return {
+      config: fallback,
+      view: buildAgentView(fallback, "default", storage.agentConfigPath, { profiles, workspaceFile }),
+    };
+  };
+
+  const historyTarget = async (): Promise<{ dir: string; label?: string }> => {
+    const storage = await getStorage();
+    const label = storage.names[currentRoot];
+    return label ? { dir: storage.historyDir, label } : { dir: storage.historyDir };
   };
 
   const handlers: MyBlogHandlers = {
@@ -274,7 +483,7 @@ export function createApi(options: ApiOptions): MyBlogApi {
 
     workspaces: async () => {
       const current = await getStorage();
-      return { active: current.activeWorkspace, list: current.workspaces };
+      return { active: current.activeWorkspace, list: current.workspaces, names: current.names };
     },
 
     addWorkspace: async (payload) => {
@@ -283,7 +492,7 @@ export function createApi(options: ApiOptions): MyBlogApi {
       const current = await getStorage();
       const list = current.workspaces.includes(resolved) ? current.workspaces : [...current.workspaces, resolved];
       await persist({ ...current, workspaces: list, activeWorkspace: resolved });
-      return { active: resolved, list };
+      return { active: resolved, list, names: current.names };
     },
 
     setWorkspace: async (payload) => {
@@ -292,7 +501,39 @@ export function createApi(options: ApiOptions): MyBlogApi {
       const current = await getStorage();
       if (!current.workspaces.includes(resolved)) throw new Error("该工作区不在白名单内");
       await persist({ ...current, activeWorkspace: resolved });
-      return { active: resolved, list: current.workspaces };
+      return { active: resolved, list: current.workspaces, names: current.names };
+    },
+
+    renameWorkspace: async (payload) => {
+      if (!payload?.path) throw new Error("缺少 path");
+      const resolved = path.resolve(payload.path);
+      const current = await getStorage();
+      if (!current.workspaces.includes(resolved)) throw new Error("该工作区不在白名单内");
+
+      const names = { ...current.names };
+      const name = (payload.name ?? "").trim();
+      if (name === "") delete names[resolved];
+      else names[resolved] = name.slice(0, 60);
+
+      await persist({ ...current, names });
+      return { active: current.activeWorkspace, list: current.workspaces, names };
+    },
+
+    removeWorkspace: async (payload) => {
+      if (!payload?.path) throw new Error("缺少 path");
+      const resolved = path.resolve(payload.path);
+      const current = await getStorage();
+      if (!current.workspaces.includes(resolved)) throw new Error("该工作区不在白名单内");
+
+      const list = current.workspaces.filter((entry) => entry !== resolved);
+      if (list.length === 0) throw new Error("至少要保留一个工作区");
+
+      const names = { ...current.names };
+      delete names[resolved];
+      const active = current.activeWorkspace === resolved ? (list[0] as string) : current.activeWorkspace;
+
+      await persist({ ...current, workspaces: list, activeWorkspace: active, names });
+      return { active, list, names };
     },
 
     check: async () => (await get()).check(),
@@ -593,21 +834,107 @@ export function createApi(options: ApiOptions): MyBlogApi {
       }
     },
 
-    agent: async () => viewAgentConfig((await getStorage()).agentConfigPath),
+    agent: async () => (await resolveAgent()).view,
+
+    saveAgent: async (payload) => {
+      const storage = await getStorage();
+      const workspace = await get();
+      const profiles = Object.keys(storage.profiles);
+      const workspaceFile = workspaceAgentFile(workspace.root);
+
+      const patch: Partial<AgentConfig> = {};
+      if (payload?.baseURL !== undefined) patch.baseURL = payload.baseURL;
+      if (payload?.model !== undefined) patch.model = payload.model;
+      if (payload?.apiKey !== undefined) patch.apiKey = payload.apiKey;
+      if (payload?.temperature !== undefined) patch.temperature = payload.temperature;
+      if (payload?.maxTokens !== undefined) patch.maxTokens = payload.maxTokens;
+
+      const formatChoice = payload?.format;
+      const applyFormat = <T extends { format?: "openai" | "anthropic" }>(target: T): T => {
+        if (formatChoice === "auto") delete target.format;
+        else if (formatChoice) target.format = formatChoice;
+        return target;
+      };
+
+      const target = payload?.target ?? "default";
+
+      if (target === "workspace-file") {
+        const current = (await readWorkspaceAgentFile(workspace.root)) ?? { baseURL: "", model: "" };
+        const next = applyFormat<AgentProfile>({ ...current, ...patch });
+        if (next.baseURL === "" || next.model === "") throw new Error("工作区配置需要 baseURL 和 model");
+        await writeFile(workspaceFile, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+        return buildAgentView(next, "workspace-file", workspaceFile, { profiles, workspaceFile });
+      }
+
+      if (target === "profile") {
+        const name = (payload?.profile ?? "").trim();
+        if (name === "") throw new Error("缺少配置档名字");
+        const current = storage.profiles[name] ?? { baseURL: "", model: "" };
+        const next = applyFormat<AgentProfile>({ ...current, ...patch });
+        if (next.baseURL === "" || next.model === "") throw new Error("配置档需要 baseURL 和 model");
+        await persist({ ...storage, profiles: { ...storage.profiles, [name]: next } });
+        return buildAgentView(next, "profile", name, {
+          profile: name,
+          profiles: Object.keys(storage.profiles),
+          workspaceFile,
+        });
+      }
+
+      if (formatChoice !== undefined) patch.format = formatChoice as unknown as AgentConfig["format"];
+      await saveAgentConfig(patch, storage.agentConfigPath);
+      const saved = (await loadAgentConfig(storage.agentConfigPath)) ?? { baseURL: "", model: "", apiKey: "" };
+      return buildAgentView(saved, "default", storage.agentConfigPath, { profiles, workspaceFile });
+    },
+
+    bindWorkspaceProfile: async (payload) => {
+      const workspace = await get();
+      const storage = await getStorage();
+      const name = (payload?.profile ?? "").trim();
+      const workspaceProfiles = { ...storage.workspaceProfiles };
+
+      if (name === "" || name === "default") delete workspaceProfiles[workspace.root];
+      else {
+        if (!storage.profiles[name]) throw new Error(`没有名为「${name}」的配置档`);
+        workspaceProfiles[workspace.root] = name;
+      }
+
+      await persist({ ...storage, workspaceProfiles });
+      return { bound: workspaceProfiles[workspace.root] ?? "" };
+    },
+
+    deleteProfile: async (payload) => {
+      const name = (payload?.profile ?? "").trim();
+      const storage = await getStorage();
+      if (!storage.profiles[name]) throw new Error(`没有名为「${name}」的配置档`);
+
+      const profiles = { ...storage.profiles };
+      delete profiles[name];
+      const workspaceProfiles = { ...storage.workspaceProfiles };
+      for (const [key, value] of Object.entries(workspaceProfiles)) {
+        if (value === name) delete workspaceProfiles[key];
+      }
+
+      await persist({ ...storage, profiles, workspaceProfiles });
+      return { ok: true };
+    },
 
     opencodeAuth: async () => {
       const file = opencodeAuthFile(options.opencodeAuthPath);
+      const modelsFile = opencodeModelsFile(options.opencodeModelsPath);
       let raw: Record<string, { key?: string } | undefined> = {};
       try {
         raw = JSON.parse(await readFile(file, "utf8")) as Record<string, { key?: string } | undefined>;
       } catch {
-        return { file, available: [] };
+        return { file, modelsFile, available: [] };
       }
-      const available = OPENCODE_PROVIDERS.filter((entry) => {
+
+      const available: OpencodeAuthView["available"] = [];
+      for (const entry of OPENCODE_PROVIDERS) {
         const key = raw[entry.id]?.key;
-        return typeof key === "string" && key !== "";
-      });
-      return { file, available };
+        if (typeof key !== "string" || key === "") continue;
+        available.push({ ...entry, models: await readOpencodeModels(modelsFile, entry.id) });
+      }
+      return { file, modelsFile, available };
     },
 
     importOpencode: async (payload) => {
@@ -631,43 +958,69 @@ export function createApi(options: ApiOptions): MyBlogApi {
       const key = raw[picked.id]?.key;
       if (typeof key !== "string" || key === "") throw new Error(`opencode 里没有登录 ${picked.label}`);
 
-      const configPath = (await getStorage()).agentConfigPath;
-      await saveAgentConfig({ baseURL: picked.baseURL, model: picked.model, apiKey: key }, configPath);
-      return { ok: true, provider: picked.id, baseURL: picked.baseURL, model: picked.model };
-    },
+      const models = await readOpencodeModels(opencodeModelsFile(options.opencodeModelsPath), picked.id);
+      const chosen = payload?.model !== undefined && payload.model !== "" ? payload.model : picked.model;
+      const model = models.find((entry) => entry.id === chosen);
+      const format = model?.format === "anthropic" ? "anthropic" : model?.format === "openai" ? "openai" : undefined;
 
-    saveAgent: async (payload) => {
       const configPath = (await getStorage()).agentConfigPath;
-      await saveAgentConfig(payload ?? {}, configPath);
-      return viewAgentConfig(configPath);
+      await saveAgentConfig(
+        { baseURL: picked.baseURL, model: chosen, apiKey: key, ...(format ? { format } : {}) },
+        configPath,
+      );
+      return { ok: true, provider: picked.id, baseURL: picked.baseURL, model: chosen, format: format ?? "auto" };
     },
 
     storage: async () => ({ ...(await getStorage()), defaults }),
 
-    saveStorage: async (payload) => ({ ...(await setStorage(payload ?? {})), defaults }),
+    saveStorage: async (payload) => {
+      const agentConfigPath = typeof payload?.agentConfigPath === "string" ? payload.agentConfigPath.trim() : "";
+      const historyDir = typeof payload?.historyDir === "string" ? payload.historyDir.trim() : "";
+      if (agentConfigPath !== "") await assertWritableConfigFile(agentConfigPath);
+      if (historyDir !== "") await assertWritableHistoryDir(historyDir);
+      return { ...(await setStorage(payload ?? {})), defaults };
+    },
 
-    sessions: async () => listSessions(currentRoot, (await getStorage()).historyDir),
+    sessions: async () => {
+      const target = await historyTarget();
+      return listSessions(currentRoot, target.dir, target.label);
+    },
 
-    createSession: async (payload) => createSession(currentRoot, (await getStorage()).historyDir, payload?.title),
+    createSession: async (payload) => {
+      const target = await historyTarget();
+      return createSession(currentRoot, target.dir, payload?.title, target.label);
+    },
 
-    activateSession: async (payload) => activateSession(currentRoot, (await getStorage()).historyDir, payload.id),
+    activateSession: async (payload) => {
+      const target = await historyTarget();
+      return activateSession(currentRoot, target.dir, payload.id, target.label);
+    },
 
     renameSession: async (payload) => {
       if (typeof payload?.title !== "string" || payload.title.trim() === "") throw new Error("缺少 title");
-      return renameSession(currentRoot, (await getStorage()).historyDir, payload.id, payload.title);
+      const target = await historyTarget();
+      return renameSession(currentRoot, target.dir, payload.id, payload.title, target.label);
     },
 
-    deleteSession: async (payload) => deleteSession(currentRoot, (await getStorage()).historyDir, payload.id),
+    deleteSession: async (payload) => {
+      const target = await historyTarget();
+      return deleteSession(currentRoot, target.dir, payload.id, target.label);
+    },
 
-    history: async () => readActive(currentRoot, (await getStorage()).historyDir),
+    history: async () => {
+      const target = await historyTarget();
+      return readActive(currentRoot, target.dir, target.label);
+    },
 
     saveHistory: async (payload) => {
-      await writeActive(currentRoot, (await getStorage()).historyDir, Array.isArray(payload?.messages) ? payload.messages : []);
+      const target = await historyTarget();
+      await writeActive(currentRoot, target.dir, Array.isArray(payload?.messages) ? payload.messages : [], target.label);
       return { ok: true };
     },
 
     clearHistory: async () => {
-      await writeActive(currentRoot, (await getStorage()).historyDir, []);
+      const target = await historyTarget();
+      await writeActive(currentRoot, target.dir, [], target.label);
       return { ok: true };
     },
   };
@@ -693,8 +1046,8 @@ export function createApi(options: ApiOptions): MyBlogApi {
       .map((message) => ({ role: message.role as "user" | "assistant", content: message.content ?? "" }));
 
     const workspace = await get();
-    const agentConfigPath = (await getStorage()).agentConfigPath;
-    for await (const event of runAgent({ workspace, messages, configPath: agentConfigPath, signal })) {
+    const { config } = await resolveAgent();
+    for await (const event of runAgent({ workspace, messages, config, signal })) {
       if (signal.aborted) break;
       emit(event);
     }

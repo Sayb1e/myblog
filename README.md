@@ -126,6 +126,9 @@ npm run desktop          # 只构建并启动 Electron main（需先 build 过 w
 **终端里跑不了 `opencode` / `claude`？**
 终端是真实 PTY，工作目录是你的学习库；命令需要在系统 PATH 里（和普通 PowerShell 一样）。
 
+**能用 opencode 的登录吗？**
+能：对话 → 设置里点「导入 OpenCode Go / Zen」，会带着 key 与 baseURL 写入配置（OpenCode 网关的请求会自动补 `x-opencode-session`）。注意个别模型在该网关不可用（例如 Go 上的 `grok-4.6`），换成 `deepseek-v4-flash` 这类即可；Claude 系模型会自动走 Anthropic 格式。
+
 **杀软 / SmartScreen 报警？**
 exe 未做代码签名。用 Release 里的 `SHA256SUMS.txt` 校验来源，或从源码自行构建。
 

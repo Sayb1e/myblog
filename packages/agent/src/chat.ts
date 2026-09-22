@@ -1,7 +1,8 @@
 import { buildContext, type Workspace } from "@myblog/core";
-import { loadAgentConfig } from "./config.js";
+import { inferFormat, loadAgentConfig, type AgentConfig } from "./config.js";
 import {
   streamCompletion,
+  streamCompletionAnthropic,
   type AssistantMessage,
   type ChatMessage,
   type ToolSpec,
@@ -30,6 +31,8 @@ export interface AgentMessage {
 export interface AgentRunOptions {
   workspace: Workspace;
   messages: AgentMessage[];
+  /** 已解析好的配置（优先于 configPath）：由调用方决定用哪个工作区/配置档 */
+  config?: AgentConfig;
   configPath?: string;
   signal?: AbortSignal;
   maxSteps?: number;
@@ -43,7 +46,7 @@ export type AgentEvent =
   | { type: "done" };
 
 export async function* runAgent(options: AgentRunOptions): AsyncGenerator<AgentEvent> {
-  const config = await loadAgentConfig(options.configPath);
+  const config = options.config ?? (await loadAgentConfig(options.configPath));
   if (!config) {
     yield { type: "error", message: "还没有配置模型：请在设置里填 baseURL / apiKey / model。" };
     yield { type: "done" };
@@ -59,10 +62,12 @@ export async function* runAgent(options: AgentRunOptions): AsyncGenerator<AgentE
   const tools: ToolSpec[] = toolSpecs();
   const maxSteps = options.maxSteps ?? 6;
 
+  const stream = inferFormat(config) === "anthropic" ? streamCompletionAnthropic : streamCompletion;
+
   try {
     for (let step = 0; step < maxSteps; step += 1) {
       let assistant: AssistantMessage | null = null;
-      for await (const event of streamCompletion(config, history, tools, options.signal)) {
+      for await (const event of stream(config, history, tools, options.signal)) {
         if (event.type === "text") yield { type: "text", text: event.text };
         else assistant = event.message;
       }

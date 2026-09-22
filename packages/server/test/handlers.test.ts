@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -184,6 +185,7 @@ describe("opencode auth import", () => {
       root: base,
       agentConfigPath: path.join(configDir, "agent.json"),
       opencodeAuthPath: authFile,
+      opencodeModelsPath: path.join(base, "nope", "models.json"),
     });
 
     const view = (await api.dispatch("opencodeAuth")) as { available: { id: string; baseURL: string }[] };
@@ -201,12 +203,145 @@ describe("opencode auth import", () => {
     expect(saved).toMatchObject({
       baseURL: "https://opencode.ai/zen/go/v1",
       apiKey: "test-key-123",
-      model: "grok-4.6",
+      model: "deepseek-v4-flash",
     });
 
     const config = (await api.dispatch("agent")) as { hasApiKey: boolean; configured: boolean };
     expect(config.hasApiKey).toBe(true);
     expect(config.configured).toBe(true);
+  });
+});
+
+describe("workspace management", () => {
+  async function makeTwo(): Promise<{ a: string; b: string; api: MyBlogApi }> {
+    const base = await mkdtemp(path.join(tmpdir(), "myblog-ws-"));
+    roots.push(base);
+    const a = path.join(base, "ws-a");
+    const b = path.join(base, "ws-b");
+    await mkdir(a, { recursive: true });
+    await mkdir(b, { recursive: true });
+    await writeFile(path.join(a, "PROGRESS.md"), "# a\n", "utf8");
+    await writeFile(path.join(b, "PROGRESS.md"), "# b\n", "utf8");
+    const api = createApi({ root: a, agentConfigPath: path.join(base, "config", "agent.json") });
+    await api.dispatch("addWorkspace", { path: b });
+    await api.dispatch("setWorkspace", { path: a });
+    return { a, b, api };
+  }
+
+  it("可以给工作区起别名、清空别名", async () => {
+    const { a, api } = await makeTwo();
+
+    const renamed = (await api.dispatch("renameWorkspace", { path: a, name: "  手机逆向  " })) as {
+      names: Record<string, string>;
+    };
+    expect(renamed.names[a]).toBe("手机逆向");
+
+    const cleared = (await api.dispatch("renameWorkspace", { path: a, name: "" })) as {
+      names: Record<string, string>;
+    };
+    expect(cleared.names[a]).toBeUndefined();
+  });
+
+  it("移除工作区：从列表去掉并保留别名以外的数据", async () => {
+    const { a, b, api } = await makeTwo();
+    await api.dispatch("renameWorkspace", { path: b, name: "备用" });
+
+    const after = (await api.dispatch("removeWorkspace", { path: b })) as {
+      list: string[];
+      active: string;
+      names: Record<string, string>;
+    };
+
+    expect(after.list).toEqual([a]);
+    expect(after.active).toBe(a);
+    expect(after.names[b]).toBeUndefined();
+    expect(existsSync(b)).toBe(true);
+  });
+
+  it("移除当前工作区会切到剩下的那个", async () => {
+    const { a, b, api } = await makeTwo();
+    const after = (await api.dispatch("removeWorkspace", { path: a })) as { list: string[]; active: string };
+    expect(after.list).toEqual([b]);
+    expect(after.active).toBe(b);
+  });
+
+  it("至少要保留一个工作区，且不能操作白名单外的路径", async () => {
+    const { a, api } = await makeTwo();
+    await api.dispatch("removeWorkspace", { path: a });
+    const names = (await api.dispatch("workspaces")) as { list: string[] };
+    const only = names.list[0] as string;
+
+    await expect(api.dispatch("removeWorkspace", { path: only })).rejects.toThrow("至少要保留一个工作区");
+    await expect(api.dispatch("renameWorkspace", { path: "C:/not-listed", name: "x" })).rejects.toThrow("白名单");
+  });
+});
+
+describe("agent config resolution", () => {
+  it("默认/配置档/工作区文件/环境变量 的优先级", async () => {
+    const base = await mkdtemp(path.join(tmpdir(), "myblog-agent-"));
+    roots.push(base);
+    const root = path.join(base, "ws");
+    await mkdir(root, { recursive: true });
+    await writeFile(path.join(root, "PROGRESS.md"), "# x\n", "utf8");
+    const api = createApi({ root, agentConfigPath: path.join(base, "config", "agent.json") });
+
+    // 1）默认（全局 agent.json）
+    await api.dispatch("saveAgent", { baseURL: "https://default.example/v1", model: "m-default", apiKey: "k-default" });
+    let view = (await api.dispatch("agent")) as { source: string; baseURL: string; hasApiKey: boolean };
+    expect(view).toMatchObject({ source: "default", baseURL: "https://default.example/v1", hasApiKey: true });
+
+    // 2）配置档 + 绑定
+    await api.dispatch("saveAgent", {
+      baseURL: "https://profile.example/v1",
+      model: "m-profile",
+      apiKey: "k-profile",
+      target: "profile",
+      profile: "本地 Ollama",
+    });
+    view = (await api.dispatch("agent")) as { source: string };
+    expect(view.source).toBe("default");
+
+    const bound = (await api.dispatch("bindWorkspaceProfile", { profile: "本地 Ollama" })) as { bound: string };
+    expect(bound.bound).toBe("本地 Ollama");
+    view = (await api.dispatch("agent")) as { source: string; baseURL: string; profile: string };
+    expect(view).toMatchObject({ source: "profile", baseURL: "https://profile.example/v1", profile: "本地 Ollama" });
+
+    // 3）工作区文件优先于配置档
+    await writeFile(
+      path.join(root, "myblog.agent.json"),
+      JSON.stringify({ baseURL: "https://file.example/v1", model: "m-file" }),
+      "utf8",
+    );
+    view = (await api.dispatch("agent")) as { source: string; baseURL: string };
+    expect(view).toMatchObject({ source: "workspace-file", baseURL: "https://file.example/v1" });
+
+    // 4）环境变量最优先
+    process.env.MYBLOG_AGENT_BASE_URL = "https://env.example/v1";
+    process.env.MYBLOG_AGENT_MODEL = "m-env";
+    try {
+      view = (await api.dispatch("agent")) as { source: string; baseURL: string };
+      expect(view).toMatchObject({ source: "env", baseURL: "https://env.example/v1" });
+    } finally {
+      delete process.env.MYBLOG_AGENT_BASE_URL;
+      delete process.env.MYBLOG_AGENT_MODEL;
+    }
+
+    // 5）删掉配置档会同时解除绑定
+    await api.dispatch("deleteProfile", { profile: "本地 Ollama" });
+    const after = (await api.dispatch("bindWorkspaceProfile", { profile: "" })) as { bound: string };
+    expect(after.bound).toBe("");
+  });
+
+  it("存储路径校验：拒绝盘符根目录与「目录当文件」", async () => {
+    const { root, api } = await makeApi();
+    const rootDir = path.parse(path.resolve(root)).root;
+
+    await expect(api.dispatch("saveStorage", { agentConfigPath: rootDir })).rejects.toThrow("盘符根目录");
+    await expect(api.dispatch("saveStorage", { agentConfigPath: root })).rejects.toThrow("不要填目录");
+
+    const file = path.join(root, "not-a-dir.txt");
+    await writeFile(file, "x", "utf8");
+    await expect(api.dispatch("saveStorage", { historyDir: file })).rejects.toThrow("不能是文件");
   });
 });
 
