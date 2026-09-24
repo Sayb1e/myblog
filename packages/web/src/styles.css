@@ -961,6 +961,7 @@ button.ghost {
 .capability.current {
   background: linear-gradient(90deg, var(--accent-soft), transparent);
   border-color: rgba(var(--accent-rgb), 0.3);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .capability.selected {

@@ -134,7 +134,6 @@ export function CapabilityMap({
         <strong>
           {capability.id} {capability.name}
         </strong>
-        {capability.active && <span className="tag">当前</span>}
       </div>
       <p className="muted">
         <Markdown inline>{capability.question}</Markdown>
@@ -213,10 +212,7 @@ export function CapabilityMap({
                 >
                   <span className="cap-row cap-row-main">
                     <span className="cap-id">{entry.id}</span>
-                    <span className="cap-name">
-                      {entry.name}
-                      {entry.active && <span className="tag">当前</span>}
-                    </span>
+                    <span className="cap-name">{entry.name}</span>
                     <span className="cap-status">
                       <Markdown inline>{entry.status}</Markdown>
                     </span>
