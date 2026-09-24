@@ -135,9 +135,6 @@ export function CapabilityMap({
           {capability.id} {capability.name}
         </strong>
         {capability.active && <span className="tag">当前</span>}
-        <button type="button" className="ghost btn-sm cap-detail-close" onClick={() => onSelect(null)}>
-          收起
-        </button>
       </div>
       <p className="muted">
         <Markdown inline>{capability.question}</Markdown>
