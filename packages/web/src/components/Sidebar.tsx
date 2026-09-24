@@ -73,7 +73,7 @@ export function Sidebar({
         <span className="brand-mark">M</span>
         <span className="brand-text">
           <span className="brand-name">MyBlog</span>
-          <span className="brand-sub" title={root}>
+          <span className="brand-sub" data-tip={root || undefined}>
             {workspace || "学习工作区"}
           </span>
         </span>
@@ -86,7 +86,7 @@ export function Sidebar({
             type="button"
             className={`nav-item${view === item.key ? " active" : ""}`}
             onClick={() => onView(item.key)}
-            title={item.label}
+            data-tip={item.label}
           >
             <span className="nav-icon">{item.icon}</span>
             <span className="nav-label">{item.label}</span>
@@ -116,7 +116,7 @@ export function Sidebar({
             type="button"
             className={`nav-item${terminalOpen ? " active" : ""}`}
             onClick={onToggleTerminal}
-            title="终端"
+            data-tip="终端"
           >
             <span className="nav-icon">
               <IconTerminal />
@@ -128,7 +128,7 @@ export function Sidebar({
           type="button"
           className={`nav-item${view === "settings" ? " active" : ""}`}
           onClick={() => onView("settings")}
-          title="设置"
+          data-tip="设置"
         >
           <span className="nav-icon">
             <IconSettings />
@@ -139,7 +139,7 @@ export function Sidebar({
           type="button"
           className="nav-item collapse-toggle"
           onClick={() => setPref("sidebarCollapsed", !prefs.sidebarCollapsed)}
-          title={prefs.sidebarCollapsed ? "展开侧栏" : "收起侧栏"}
+          data-tip={prefs.sidebarCollapsed ? "展开侧栏" : "收起侧栏"}
         >
           <span className="nav-icon" style={{ transform: prefs.sidebarCollapsed ? "rotate(180deg)" : undefined }}>
             <IconChevron />

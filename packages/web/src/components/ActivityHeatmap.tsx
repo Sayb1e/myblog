@@ -81,7 +81,7 @@ export function ActivityHeatmap({ activity, weeks = 12 }: Props) {
               <span
                 key={fmt(day)}
                 className={`heat-cell level-${level(count)}${future ? " future" : ""}`}
-                title={`${fmt(day)} · ${count > 0 ? `${count} 项进展` : "没有记录"}`}
+                data-tip={`${fmt(day)} · ${count > 0 ? `${count} 项进展` : "没有记录"}`}
               />
             );
           })}

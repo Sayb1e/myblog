@@ -856,7 +856,7 @@ export function ChatView() {
 
       <div
         className={`context-meter level-${contextLevel}`}
-        title={`估算约 ${usedTokens.toLocaleString()} / ${contextLimit.toLocaleString()} tokens（含系统提示与工作区上下文，粗略估算）`}
+        data-tip={`估算约 ${usedTokens.toLocaleString()} / ${contextLimit.toLocaleString()} tokens（含系统提示与工作区上下文，粗略估算）`}
       >
         <span className="context-text">
           上下文 ≈{formatTokens(usedTokens)} / {formatTokens(contextLimit)}

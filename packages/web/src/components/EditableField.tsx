@@ -39,7 +39,7 @@ export function EditableField({ value, placeholder, multiline, onSave }: Props) 
         className={`editable${saving ? " saving" : ""}`}
         role="button"
         tabIndex={0}
-        title="点击编辑"
+        data-tip="点击编辑"
         onClick={() => setEditing(true)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {

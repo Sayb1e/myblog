@@ -235,7 +235,7 @@ export function FilesView({ root }: Props) {
             type="button"
             className={`crumb${path === "" ? " current" : ""}`}
             onClick={() => setPath("")}
-            title={root}
+            data-tip={root}
           >
             {workspace || "工作区"}
           </button>
@@ -273,7 +273,7 @@ export function FilesView({ root }: Props) {
         {file ? (
           <>
             <div className="card-head">
-              <h2 title={file.path}>{file.path}</h2>
+              <h2 data-tip={file.path}>{file.path}</h2>
               <div className="files-preview-actions">
                 {highlight && !file.binary && !file.dataUrl && (
                   <div className="seg compact">
@@ -313,7 +313,7 @@ export function FilesView({ root }: Props) {
                   className="file-image"
                   src={file.dataUrl}
                   alt={file.path}
-                  title="点击放大"
+                  data-tip="点击放大"
                   onClick={() => setZoom(file.dataUrl ?? null)}
                 />
               </div>
