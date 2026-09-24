@@ -23,7 +23,32 @@ function level(status: string): 0 | 1 | 2 {
   return 1;
 }
 
-const PERCENT = [6, 55, 100] as const;
+function todayString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function daysBetween(from: string, to: string): number {
+  return Math.round((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / 86400000);
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/** 每个能力四个维度的进度条：掌握（状态）/ 投入（出现天数）/ 持续（时间跨度）/ 热度（最近程度） */
+function params(status: string, used: { count: number; first: string; last: string } | undefined) {
+  const mastery = level(status);
+  const count = used?.count ?? 0;
+  const first = used?.first ?? "";
+  const last = used?.last ?? "";
+  return [
+    { key: "mastery", label: "掌握", ratio: mastery === 2 ? 1 : mastery === 1 ? 0.55 : 0.08, tip: `状态：${status || "未填"}` },
+    { key: "volume", label: "投入", ratio: clamp01(count / 10), tip: count > 0 ? `学习记录里出现 ${count} 天` : "还没出现在学习记录里" },
+    { key: "span", label: "持续", ratio: first && last ? clamp01((daysBetween(first, last) + 1) / 30) : 0, tip: first ? `${first} → ${last}` : "还没有记录" },
+    { key: "recency", label: "热度", ratio: last ? clamp01(1 - daysBetween(last, todayString()) / 60) : 0, tip: last ? `最近 ${last}` : "还没有记录" },
+  ];
+}
 
 export function CapabilityMap({
   capabilities,
@@ -35,11 +60,12 @@ export function CapabilityMap({
   history,
 }: Props) {
   const usage = useMemo(() => {
-    const map = new Map<string, { count: number; last: string }>();
+    const map = new Map<string, { count: number; first: string; last: string }>();
     for (const [date, ids] of history ?? []) {
       for (const id of ids) {
-        const entry = map.get(id) ?? { count: 0, last: "" };
+        const entry = map.get(id) ?? { count: 0, first: "", last: "" };
         entry.count += 1;
+        if (entry.first === "" || date < entry.first) entry.first = date;
         if (date > entry.last) entry.last = date;
         map.set(id, entry);
       }
@@ -170,7 +196,6 @@ export function CapabilityMap({
 
       <ul className={`capabilities${capped && !expanded ? " capped" : ""}`}>
         {capabilities.map((entry, index) => {
-          const stage = level(entry.status);
           const used = usage.get(entry.id);
           const isActive = selected === entry.id;
           return (
@@ -200,18 +225,14 @@ export function CapabilityMap({
                     </span>
                   </span>
                   <span className="cap-row cap-row-progress">
-                    <span className="cap-meter">
-                      <span className={`cap-bar level-${stage}`}>
-                        <i style={{ width: `${PERCENT[stage]}%` }} />
+                    {params(entry.status, used).map((param) => (
+                      <span key={param.key} className="cap-param" title={param.tip}>
+                        <span className="cap-param-label">{param.label}</span>
+                        <span className="cap-param-bar">
+                          <i style={{ width: `${Math.round(param.ratio * 100)}%` }} />
+                        </span>
                       </span>
-                      <span className="cap-percent">{PERCENT[stage]}%</span>
-                    </span>
-                    <span
-                      className="cap-usage"
-                      title={used ? `出现在 ${used.count} 天，最近 ${used.last}` : "学习记录里还没出现"}
-                    >
-                      {used ? `${used.count} 天` : "—"}
-                    </span>
+                    ))}
                   </span>
                 </div>
               </li>

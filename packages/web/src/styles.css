@@ -919,12 +919,39 @@ button.ghost {
   margin-left: auto;
 }
 
-.cap-row-progress .cap-meter {
-  flex: 1 1 auto;
+.cap-row-progress {
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
-.cap-row-progress .cap-usage {
-  margin-left: auto;
+.cap-param {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.cap-param-label {
+  flex: none;
+}
+
+.cap-param-bar {
+  display: inline-block;
+  width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--inset);
+  overflow: hidden;
+}
+
+.cap-param-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.2s;
 }
 
 .capability:hover {
