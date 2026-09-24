@@ -11,7 +11,6 @@ export function ProgressCard({ progress, onSave }: Props) {
     <section className="card">
       <div className="card-head">
         <h2>进度</h2>
-        <span className="muted">点击可编辑</span>
       </div>
 
       <div className="field">

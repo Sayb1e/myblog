@@ -177,7 +177,6 @@ export function CapabilityMap({
     <section className="card cap-card">
       <div className="card-head">
         <h2>能力地图</h2>
-        <span className="muted">点击查看 / 改状态</span>
         {capped && (
           <button type="button" className="ghost btn-sm" onClick={() => setExpanded((value) => !value)}>
             {expanded ? "收起" : `展开全部 ${capabilities.length}`}
