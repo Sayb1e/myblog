@@ -15,16 +15,19 @@ const FOCUSABLE =
 
 export function Modal({ open, title, onClose, children, className = "", closeOnOverlay = true }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
+  // 只在打开时聚焦一次；键盘监听用 ref 取最新的 onClose，避免每次渲染重跑 effect 抢焦点
   useEffect(() => {
     if (!open) return;
     const panel = panelRef.current;
-    panel?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    (panel?.querySelector<HTMLElement>("[data-autofocus]") ?? panel?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
 
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !panel) return;
@@ -43,7 +46,7 @@ export function Modal({ open, title, onClose, children, className = "", closeOnO
 
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

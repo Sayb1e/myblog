@@ -894,7 +894,7 @@ export function ChatView() {
       <Modal open={renameOpen} className="dialog" title="重命名会话" onClose={() => setRenameOpen(false)}>
         <div className="dialog-body">
           <input
-            autoFocus
+            data-autofocus
             value={renameValue}
             onChange={(event) => setRenameValue(event.target.value)}
             onKeyDown={(event) => {

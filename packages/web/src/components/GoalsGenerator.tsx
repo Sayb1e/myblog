@@ -92,6 +92,7 @@ export function GoalsGenerator({ open, modelReady, onOpenModel, onSaved, onClose
               </p>
               <textarea
                 className="goals-gen-input"
+                data-autofocus
                 value={text}
                 rows={8}
                 placeholder="例如：我想入门安卓逆向。会一点 Java，装过 adb 但没用过 Frida。每天 1 小时，希望半年内能独立分析一个简单 App 的加固逻辑。"
