@@ -612,7 +612,8 @@ select {
 .card-head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   margin-bottom: 14px;
 }
 
@@ -621,10 +622,16 @@ select {
   font-weight: 650;
   letter-spacing: 0.3px;
   margin: 0;
+  white-space: nowrap;
+}
+
+.card-head button {
+  white-space: nowrap;
 }
 
 .card-head .muted {
   margin-left: auto;
+  white-space: nowrap;
 }
 
 .today-card {
