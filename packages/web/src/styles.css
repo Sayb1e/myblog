@@ -2709,18 +2709,36 @@ details.settings-group[open] > summary::before {
 /* ---------- terminal dock (bottom) ---------- */
 
 .terminal-dock {
+  position: relative;
   flex: none;
   display: flex;
   flex-direction: column;
-  height: 38vh;
-  min-height: 160px;
-  max-height: 70vh;
   border-top: 1px solid var(--border);
   background: var(--panel);
 }
 
 .terminal-dock.closed {
   display: none;
+}
+
+.terminal-dock-resize {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  z-index: 2;
+  cursor: row-resize;
+}
+
+.terminal-dock-resize:hover {
+  background: var(--accent-soft);
+}
+
+body.resizing-row,
+body.resizing-row * {
+  cursor: row-resize !important;
+  user-select: none !important;
 }
 
 .terminal-dock-head {

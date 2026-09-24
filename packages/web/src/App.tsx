@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { ProgressSnapshot } from "@myblog/core";
 import {
   errorMessage,
@@ -88,6 +88,23 @@ export function App() {
   const toggleTerminal = (): void => {
     if (!terminalOpen) setTerminalMounted(true);
     setTerminalOpen(!terminalOpen);
+  };
+
+  const startTerminalResize = (event: ReactMouseEvent): void => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = prefs.terminalHeight;
+    const clamp = (value: number): number =>
+      Math.min(Math.max(Math.round(value), 140), Math.round(window.innerHeight * 0.85));
+    const onMove = (moveEvent: MouseEvent): void => setPref("terminalHeight", clamp(startHeight + (startY - moveEvent.clientY)));
+    const onUp = (): void => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("resizing-row");
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    document.body.classList.add("resizing-row");
   };
   const [chatted, setChatted] = useState(() => localStorage.getItem("myblog:onboard:chatted") === "1");
   const [onboardDismissed, setOnboardDismissed] = useState(
@@ -535,7 +552,14 @@ export function App() {
         </div>
 
         {prefs.terminalEnabled && terminalMounted && (
-          <section className={`terminal-dock${terminalOpen ? "" : " closed"}`}>
+          <section className={`terminal-dock${terminalOpen ? "" : " closed"}`} style={{ height: prefs.terminalHeight }}>
+            <div
+              className="terminal-dock-resize"
+              role="separator"
+              aria-orientation="horizontal"
+              title="拖动调整高度"
+              onMouseDown={startTerminalResize}
+            />
             <div className="terminal-dock-head">
               <span className="terminal-dock-title">终端</span>
               <button

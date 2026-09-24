@@ -20,6 +20,7 @@ export interface Prefs {
   signatureEnabled: boolean;
   signature: string;
   contextLimit: number;
+  terminalHeight: number;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -37,6 +38,7 @@ export const DEFAULT_PREFS: Prefs = {
   signatureEnabled: false,
   signature: "",
   contextLimit: 128000,
+  terminalHeight: 320,
 };
 
 const STORAGE_KEY = "myblog:prefs";
