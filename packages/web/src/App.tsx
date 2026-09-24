@@ -22,6 +22,7 @@ import {
   type GitState,
   type WorkspaceList,
 } from "./api.js";
+import { ActivityHeatmap } from "./components/ActivityHeatmap.js";
 import { CapabilityMap } from "./components/CapabilityMap.js";
 import { ChatView } from "./components/ChatView.js";
 import { CheckView } from "./components/CheckView.js";
@@ -33,6 +34,7 @@ import { GitCard } from "./components/GitCard.js";
 import { GoalsGenerator } from "./components/GoalsGenerator.js";
 import { IconPencil, IconTrash } from "./components/icons.js";
 import { MarkdownProvider } from "./components/Markdown.js";
+import { Milestones } from "./components/Milestones.js";
 import { Onboarding } from "./components/Onboarding.js";
 import { ProgressCard } from "./components/ProgressCard.js";
 import { SettingsView } from "./components/SettingsView.js";
@@ -137,6 +139,28 @@ export function App() {
     for (const summary of summaries) map.set(summary.date, summary.skills);
     return map;
   }, [summaries]);
+
+  const activity = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const record of status?.records ?? []) map.set(record.date, (map.get(record.date) ?? 0) + 1);
+    for (const summary of summaries) if (!map.has(summary.date)) map.set(summary.date, 1);
+    return map;
+  }, [summaries, status?.records]);
+
+  const currentStreak = useMemo(() => {
+    const fmt = (date: Date): string =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const has = (date: Date): boolean => (activity.get(fmt(date)) ?? 0) > 0;
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    if (!has(cursor)) cursor.setDate(cursor.getDate() - 1);
+    let streak = 0;
+    while (has(cursor)) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }, [activity]);
 
   const openDate = useCallback((value: string) => {
     setDate(value);
@@ -509,6 +533,15 @@ export function App() {
                       skillsByDate={skillsByDate}
                       skill={skill}
                       onOpen={openDate}
+                    />
+                  )}
+                  {status && <ActivityHeatmap activity={activity} />}
+                  {status && (
+                    <Milestones
+                      summaryCount={summaries.length}
+                      currentStreak={currentStreak}
+                      capabilities={status.capabilities}
+                      chatted={chatted}
                     />
                   )}
                   <GitCard onCommitted={refresh} />
