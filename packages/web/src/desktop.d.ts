@@ -27,6 +27,9 @@ declare global {
   interface Window {
     myblog?: {
       desktop?: boolean;
+      state?: () => Promise<{ ready: boolean; root: string }>;
+      setupWorkspace?: (path: string) => Promise<{ root: string }>;
+      createSampleWorkspace?: (parent: string) => Promise<{ root: string }>;
       pickDirectory?: () => Promise<string | null>;
       absolutePath?: (relative: string) => Promise<string>;
       reveal?: (relative: string) => void;

@@ -13,7 +13,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const READ_LIMIT = 256 * 1024;
 const WRITE_LIMIT = 1024 * 1024;
 export const LIST_LIMIT = 500;
-export const SKIP_DIRS = new Set([".git", "node_modules", "dist", "release"]);
+export const SKIP_DIRS = new Set([".git", ".myblog", "node_modules", "dist", "release"]);
 
 export function resolveInside(root: string, target: unknown): string {
   const value = typeof target === "string" ? target.trim() : "";
@@ -70,7 +70,7 @@ export function toolSpecs(): ToolSpec[] {
       type: "function",
       function: {
         name: "myblog_read_summary",
-        description: "读取某天的 YYYY-MM-DD/总结.md。",
+        description: "读取某天的 YYYY-MM-DD/SUMMARY.md。",
         parameters: {
           type: "object",
           properties: { date: { type: "string", description: "日期 YYYY-MM-DD" } },
@@ -83,7 +83,8 @@ export function toolSpecs(): ToolSpec[] {
       type: "function",
       function: {
         name: "myblog_scaffold",
-        description: "为某天创建 总结.md 骨架（已存在不覆盖）。用户同意后再调用。",
+        description:
+          "为某天创建 SUMMARY.md 骨架（已存在不覆盖）。只在当天确有进展时调用，用户同意后再调用。",
         parameters: {
           type: "object",
           properties: {
@@ -110,7 +111,7 @@ export function toolSpecs(): ToolSpec[] {
             learned: { type: "string", description: "「学到哪了」" },
             next: { type: "string", description: "「下次从哪继续」" },
             didWhat: { type: "string", description: "学习记录「这次做了什么」，填了才加记录" },
-            link: { type: "string", description: "链接，默认 ./<date>/总结.md" },
+            link: { type: "string", description: "链接，默认 ./<date>/SUMMARY.md" },
             linkText: { type: "string", description: "链接文字，默认「总结」" },
             dryRun: { type: "boolean", description: "默认 true；确认后传 false 才落盘" },
           },
@@ -293,6 +294,7 @@ export async function executeTool(workspace: Workspace, name: string, args: Reco
       }
 
       try {
+        await workspace.backup(absolute);
         await mkdir(dirname(absolute), { recursive: true });
         await writeFile(absolute, content, "utf8");
       } catch (error) {

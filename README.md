@@ -64,15 +64,15 @@ learning-workspace/
 ├── GOALS.md           # 可选：当前阶段 / 能力编号（能力地图来源）/ 阶段顺序
 ├── AGENTS.md          # 可选：给 AI agent 的说明（myblog init 会托管一段）
 ├── 2026-09-17/
-│   └── 总结.md         # # YYYY-MM-DD + 前情提要 / 这次（含「能力：G?」）/ 下次从哪继续
+│   └── SUMMARY.md      # # YYYY-MM-DD + 前情提要 / 这次（含「能力：G?」）/ 下次从哪继续
 └── 2026-09-18/        # 当天产生的工程 / 脚本 / APK 一律进日期子目录
 ```
 
 - 「现在学到哪了」是标签段落：`学到哪了：…`、`下次从哪继续：…`、`最近一次：[日期](路径)`。
 - 「学习记录」是 GFM 表格：`| 日期 | 这次做了什么 | 链接 |`，新记录插在表头下方第一行。
-- 「能力编号」表格：`| 编号 | 能力 | 岗位侧在问什么 | 当前状态 |`（写在 `GOALS.md`）。
+- 「能力编号」表格：`| 编号 | 能力 | 要能回答什么 | 当前状态 |`（写在 `GOALS.md`；表头只是提示，怎么取名都行）。
 - `GOALS.md` **可选**：没有它也能用（阶段与能力地图为空，校验只给一条警告）。
-- 文件名可用根目录 `myblog.config.json` 覆盖：`{ "overview": "PROGRESS.md", "goals": "GOALS.md", "summaryFile": "总结.md" }`。
+- 文件名可用根目录 `myblog.config.json` 覆盖：`{ "overview": "PROGRESS.md", "goals": "GOALS.md", "summaryFile": "SUMMARY.md" }`。旧的 `总结.md` 在首次读取时会自动改名为 `SUMMARY.md` 并同步总览里的链接。
 
 ## 接入 AI agent
 

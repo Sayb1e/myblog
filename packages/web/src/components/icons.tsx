@@ -309,3 +309,11 @@ export function IconGit(props: IconProps) {
     </Base>
   );
 }
+
+export function IconPuzzle(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M9 4a2 2 0 0 1 4 0v1h4a1 1 0 0 1 1 1v4h1a2 2 0 1 1 0 4h-1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 1 0-4 0v1H5a1 1 0 0 1-1-1v-4h1a2 2 0 1 0 0-4H4V6a1 1 0 0 1 1-1h4z" />
+    </Base>
+  );
+}

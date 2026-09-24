@@ -8,9 +8,10 @@ interface Props {
   onOpenDate: (date: string) => void;
   onOpenPalette?: () => void;
   onInit?: () => void;
+  onWriteToday?: () => void;
 }
 
-export function TodayCard({ plan, workspace, onOpenDate, onOpenPalette, onInit }: Props) {
+export function TodayCard({ plan, workspace, onOpenDate, onOpenPalette, onInit, onWriteToday }: Props) {
   const today = new Date();
   const dateLabel = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
     today.getDate(),
@@ -26,6 +27,11 @@ export function TodayCard({ plan, workspace, onOpenDate, onOpenPalette, onInit }
         <div className="hero-meta">
           <span className="chip accent">{dateLabel}</span>
           <span className="chip">{plan.stageIds.join(" · ") || "未识别阶段"}</span>
+          {onWriteToday && (
+            <button type="button" className="btn-sm hero-write" onClick={onWriteToday}>
+              写今天
+            </button>
+          )}
           {onOpenPalette && (
             <button type="button" className="icon-btn sm hero-cmd" onClick={onOpenPalette} data-tip="命令面板 (Ctrl+K)">
               <IconCommand />
@@ -68,7 +74,7 @@ export function TodayCard({ plan, workspace, onOpenDate, onOpenPalette, onInit }
           </span>
           {plan.missing.includes("goals") && onInit && (
             <button type="button" className="btn-sm" onClick={onInit}>
-              生成岗位目标
+              生成学习目标
             </button>
           )}
         </div>

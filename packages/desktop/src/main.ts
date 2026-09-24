@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, shell } from "electron";
 import * as pty from "node-pty";
 import { resolveInside } from "@myblog/agent";
-import { createApi, type ChatStreamPayload, type MyBlogApi } from "@myblog/server";
+import { createApi, scaffoldWorkspace, type ChatStreamPayload, type MyBlogApi } from "@myblog/server";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const smoke = Boolean(process.env.MYBLOG_DESKTOP_SMOKE);
@@ -129,6 +129,26 @@ function registerIpc(): void {
     return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
   });
 
+  ipcMain.handle("myblog:state", () => ({ ready: Boolean(api), root: currentRoot }));
+
+  ipcMain.handle("myblog:setup", async (_event, picked: string) => {
+    if (typeof picked !== "string" || picked === "") throw new Error("缺少学习库路径");
+    const resolved = path.resolve(picked);
+    await writeConfig(resolved);
+    startApi(resolved);
+    return { root: resolved };
+  });
+
+  ipcMain.handle("myblog:setup-sample", async (_event, parent?: string) => {
+    const base = typeof parent === "string" && parent !== "" ? path.resolve(parent) : app.getPath("documents");
+    const dir = path.join(base, "MyBlog 示例学习库");
+    await mkdir(dir, { recursive: true });
+    await scaffoldWorkspace(dir);
+    await writeConfig(dir);
+    startApi(dir);
+    return { root: dir };
+  });
+
   ipcMain.on("theme:set", (_event, theme: "dark" | "light" | "system") => {
     if (theme !== "dark" && theme !== "light" && theme !== "system") return;
     nativeTheme.themeSource = theme;
@@ -174,8 +194,8 @@ async function writeConfig(root: string): Promise<void> {
 
 async function promptRoot(): Promise<string | null> {
   const result = await dialog.showOpenDialog({
-    title: "选择学习库（含「PROGRESS.md」的目录）",
-    properties: ["openDirectory"],
+    title: "选择学习库目录（空文件夹也可以）",
+    properties: ["openDirectory", "createDirectory"],
   });
   return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
 }
@@ -186,18 +206,32 @@ async function ensureRoot(): Promise<string | null> {
 
   const config = await readConfig();
   if (config.root) return config.root;
-  const picked = await promptRoot();
-  if (!picked) return null;
-  await writeConfig(picked);
-  return picked;
+  // 首次运行：不在这里弹目录框，交给渲染进程的首启向导（可取消、可用示例）
+  return null;
+}
+
+function startApi(root: string): void {
+  disposeWatch?.();
+  currentRoot = root;
+  api = createApi({
+    root,
+    agentConfigPath: agentConfigPath(),
+    historyDir: historyDir(),
+    pluginsDir: path.join(app.getPath("userData"), "plugins"),
+    onRootChange: (next) => {
+      currentRoot = next;
+      watchWorkspace();
+    },
+  });
+  watchWorkspace();
 }
 
 async function createWindow(): Promise<void> {
   win = new BrowserWindow({
     width: 1200,
     height: 820,
-    minWidth: 900,
-    minHeight: 600,
+    minWidth: 760,
+    minHeight: 560,
     backgroundColor: "#0b0d12",
     title: "MyBlog",
     frame: false,
@@ -221,7 +255,8 @@ async function switchWorkspace(): Promise<void> {
   const picked = await promptRoot();
   if (!picked) return;
   await writeConfig(picked);
-  await api?.dispatch("addWorkspace", { path: picked });
+  if (!api) startApi(picked);
+  else await api.dispatch("addWorkspace", { path: picked });
   watchWorkspace();
   win?.webContents.reload();
 }
@@ -264,24 +299,10 @@ function buildMenu(): void {
 
 async function boot(): Promise<void> {
   const root = await ensureRoot();
-  if (!root) {
-    app.quit();
-    return;
-  }
+  if (root) startApi(root);
 
-  currentRoot = root;
-  api = createApi({
-    root,
-    agentConfigPath: agentConfigPath(),
-    historyDir: historyDir(),
-    onRootChange: (next) => {
-      currentRoot = next;
-      watchWorkspace();
-    },
-  });
-  watchWorkspace();
-  buildMenu();
   registerIpc();
+  buildMenu();
   await createWindow();
 
   if (smoke) {
@@ -292,7 +313,7 @@ async function boot(): Promise<void> {
       console.log(`SMOKE_EVAL=${typeof value === "string" ? value : JSON.stringify(value)}`);
     }
     const text = await win?.webContents.executeJavaScript("document.body.innerText").catch(() => "");
-    console.log(`SMOKE_OK root=${currentRoot} version=${api.version}`);
+    console.log(`SMOKE_OK root=${currentRoot} version=${api?.version ?? "unconfigured"}`);
     console.log(`SMOKE_TEXT=${String(text ?? "").replace(/\s+/g, " ").slice(0, 240)}`);
     if (process.env.MYBLOG_DESKTOP_SMOKE === "pty") {
       const term = spawnPty(currentRoot, 80, 24);
@@ -341,7 +362,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0 && currentRoot !== "") void createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow();
   });
 
   app.on("before-quit", () => {

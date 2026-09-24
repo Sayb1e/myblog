@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { errorMessage, getStorage, saveStorage, type StorageView } from "../api.js";
+import { errorMessage, getPlugins, getStorage, saveStorage, type PluginInfo, type StorageView } from "../api.js";
 import { useToast } from "../hooks/useToasts.js";
 import { usePrefs, type AccentPref, type FontPref, type Prefs, type StylePref, type ThemePref } from "../prefs.js";
-import { IconFolder, IconInfo, IconMoon, IconSettings, IconSliders, IconSun } from "./icons.js";
+import { IconFolder, IconInfo, IconMoon, IconPuzzle, IconSettings, IconSliders, IconSun } from "./icons.js";
 
 function SystemIcon() {
   return (
@@ -18,11 +18,12 @@ interface Props {
   version: string;
 }
 
-type CategoryId = "ui" | "features" | "storage" | "about";
+type CategoryId = "ui" | "features" | "plugins" | "storage" | "about";
 
 const CATEGORIES: { id: CategoryId; label: string; icon: ReactNode }[] = [
   { id: "ui", label: "界面", icon: <IconSliders /> },
   { id: "features", label: "功能", icon: <IconSettings /> },
+  { id: "plugins", label: "插件", icon: <IconPuzzle /> },
   { id: "storage", label: "存储", icon: <IconFolder /> },
   { id: "about", label: "关于", icon: <IconInfo /> },
 ];
@@ -60,6 +61,7 @@ export function SettingsView({ root, version }: Props) {
   const [storage, setStorage] = useState<StorageView | null>(null);
   const [agentPath, setAgentPath] = useState("");
   const [historyPath, setHistoryPath] = useState("");
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -73,6 +75,12 @@ export function SettingsView({ root, version }: Props) {
       }
     })();
   }, [toast]);
+
+  useEffect(() => {
+    void getPlugins()
+      .then((view) => setPlugins(Array.isArray(view?.plugins) ? view.plugins : []))
+      .catch(() => undefined);
+  }, []);
 
   const canPick = typeof window !== "undefined" && Boolean(window.myblog?.pickDirectory);
 
@@ -247,6 +255,63 @@ export function SettingsView({ root, version }: Props) {
             <Toggle prefKey="chatEnabled" label="内置对话" hint="在应用内用自己的模型对话与规划" />
             <Toggle prefKey="terminalEnabled" label="终端入口" hint="显示内嵌终端页面，原生调用" />
             <Toggle prefKey="liveRefresh" label="实时同步" hint="监听工作区文件变化并自动刷新" />
+            <div className="setting-field">
+              <strong>上下文窗口大小</strong>
+              <p className="muted">对话里「上下文用量」估算的分母，按你所用模型的上下文长度填（tokens），默认 128000。</p>
+              <input
+                type="number"
+                min={1000}
+                step={1000}
+                value={prefs.contextLimit}
+                onChange={(event) => setPref("contextLimit", Math.max(1000, Number(event.target.value) || 0))}
+              />
+            </div>
+          </>
+        )}
+
+        {category === "plugins" && (
+          <>
+            <div className="card-head">
+              <h2>插件</h2>
+            </div>
+            <Toggle prefKey="signatureEnabled" label="个性签名" hint="在顶栏标题旁显示一句你自己的话。" />
+            {prefs.signatureEnabled && (
+              <div className="setting-field">
+                <strong>签名内容</strong>
+                <input
+                  value={prefs.signature}
+                  maxLength={60}
+                  placeholder="例如：病树前头万木春"
+                  onChange={(event) => setPref("signature", event.target.value)}
+                />
+              </div>
+            )}
+            <div className="setting-field">
+              <strong>已安装插件</strong>
+              <p className="muted">
+                插件放在应用数据目录的 <code className="code">plugins/</code> 下，每个子目录含{" "}
+                <code className="code">plugin.json</code>。支持：命令面板命令、agent 工具、API handler。
+              </p>
+              {plugins.length === 0 ? (
+                <p className="muted">还没有安装插件。</p>
+              ) : (
+                <ul className="plugin-list">
+                  {plugins.map((plugin) => (
+                    <li key={plugin.id} className="plugin-item">
+                      <div className="plugin-head">
+                        <strong>{plugin.name}</strong>
+                        {plugin.version && <span className="muted">{plugin.version}</span>}
+                      </div>
+                      {plugin.description && <p className="muted">{plugin.description}</p>}
+                      <p className="muted">
+                        命令 {plugin.commands.length} · 工具 {plugin.tools.length} · handler {plugin.handlers.length}
+                      </p>
+                      {plugin.error && <p className="warn-text">加载失败：{plugin.error}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </>
         )}
 

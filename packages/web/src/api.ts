@@ -17,7 +17,9 @@ import type {
   FileContent,
   FileListing,
   GitState,
+  GoalsDraftResult,
   OpencodeAuthView,
+  PluginInfo,
   SearchHit,
   SessionList,
   SessionMeta,
@@ -35,7 +37,10 @@ export type {
   FileEntry,
   FileListing,
   GitState,
+  GoalsDraftResult,
+  GoalsValidation,
   OpencodeAuthView,
+  PluginInfo,
   SearchHit,
   SessionList,
   SessionMeta,
@@ -86,6 +91,18 @@ export const closeDay = (payload: CloseDayInput & { dryRun?: boolean }): Promise
 
 export const getAgentConfig = (): Promise<AgentView> => call("agent");
 
+export const draftGoals = (text: string): Promise<GoalsDraftResult> => call("draftGoals", { text });
+
+export const saveGoals = (content: string): Promise<{ ok: true; path: string; capabilities: number }> =>
+  call("saveGoals", { content });
+
+export const testAgent = (patch: {
+  baseURL?: string;
+  model?: string;
+  apiKey?: string;
+  format?: "openai" | "anthropic" | "auto";
+}): Promise<{ ok: true; message: string }> => call("testAgent", patch);
+
 export const saveAgentConfig = (patch: {
   baseURL?: string;
   model?: string;
@@ -101,6 +118,15 @@ export const bindWorkspaceProfile = (profile: string): Promise<{ bound: string }
 
 export const deleteAgentProfile = (profile: string): Promise<{ ok: boolean }> =>
   call("deleteProfile", { profile });
+
+export interface PluginView {
+  plugins: PluginInfo[];
+  commands: { id: string; title: string; hint: string }[];
+}
+
+export const getPlugins = (): Promise<PluginView> => call("plugins");
+
+export const runPluginCommand = (id: string): Promise<unknown> => call("runPluginCommand", { id });
 
 export const getStorage = (): Promise<StorageView> => call("storage");
 

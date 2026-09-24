@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage, listFiles, readWorkspaceFile, type FileContent, type FileEntry, type FileListing } from "../api.js";
 import { useToast } from "../hooks/useToasts.js";
 import { usePrefs } from "../prefs.js";
+import { EmptyState } from "./EmptyState.js";
 import { IconArrowLeft, IconCopy, IconFile, IconFolder, IconRefresh } from "./icons.js";
 import { Markdown } from "./Markdown.js";
 
@@ -71,6 +72,26 @@ function segments(path: string): { label: string; path: string }[] {
   return parts.map((part, index) => ({ label: part, path: parts.slice(0, index + 1).join("/") }));
 }
 
+/** 把 markdown 里的相对链接解析成工作区内的相对路径；外部链接返回 null */
+function resolveRelative(fromFile: string, href: string): string | null {
+  let clean = href.split("#")[0]?.split("?")[0] ?? "";
+  if (clean === "" || /^[a-z][a-z0-9+.-]*:/i.test(clean) || clean.startsWith("//")) return null;
+  try {
+    clean = decodeURIComponent(clean);
+  } catch {
+    // 保持原样
+  }
+  const baseDir = fromFile.includes("/") ? fromFile.slice(0, fromFile.lastIndexOf("/")) : "";
+  const combined = clean.startsWith("/") ? clean.slice(1) : `${baseDir}/${clean}`;
+  const stack: string[] = [];
+  for (const segment of combined.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") stack.pop();
+    else stack.push(segment);
+  }
+  return stack.length === 0 ? null : stack.join("/");
+}
+
 export function FilesView({ root }: Props) {
   const { prefs } = usePrefs();
   const toast = useToast();
@@ -81,6 +102,7 @@ export function FilesView({ root }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [menu, setMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
+  const [zoom, setZoom] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const workspace = root ? root.split(/[\\/]/).filter(Boolean).pop() ?? "" : "";
@@ -139,6 +161,22 @@ export function FilesView({ root }: Props) {
       toast("error", errorMessage(caught));
     }
   };
+
+  const navigate = (href: string): boolean => {
+    const resolved = resolveRelative(file?.path ?? "", href);
+    if (!resolved) return false;
+    void openFile(resolved);
+    return true;
+  };
+
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setZoom(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom]);
 
   const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 
@@ -271,7 +309,13 @@ export function FilesView({ root }: Props) {
             </div>
             {file.dataUrl ? (
               <div className="file-image-wrap">
-                <img className="file-image" src={file.dataUrl} alt={file.path} />
+                <img
+                  className="file-image"
+                  src={file.dataUrl}
+                  alt={file.path}
+                  title="点击放大"
+                  onClick={() => setZoom(file.dataUrl ?? null)}
+                />
               </div>
             ) : file.binary ? (
               <p className="muted">这是二进制文件，暂不支持预览。</p>
@@ -280,7 +324,7 @@ export function FilesView({ root }: Props) {
                 {file.truncated && <p className="muted">文件超过 256KB，只显示开头部分。</p>}
                 {highlight && mode === "preview" ? (
                   <div className="markdown-preview">
-                    <Markdown>{markdown ? file.content : fence(file.content, code ?? "")}</Markdown>
+                    <Markdown onNavigate={navigate}>{markdown ? file.content : fence(file.content, code ?? "")}</Markdown>
                   </div>
                 ) : (
                   <pre className="file-content">{file.content}</pre>
@@ -289,13 +333,11 @@ export function FilesView({ root }: Props) {
             )}
           </>
         ) : (
-          <div className="empty-state">
-            <div className="empty-mark">
-              <IconFile />
-            </div>
-            <h2>预览文件</h2>
-            <p className="muted">从左侧选择文件查看内容；点目录进入下一层，右键可复制路径。</p>
-          </div>
+          <EmptyState
+            icon={<IconFile />}
+            title="预览文件"
+            description="从左侧选择文件查看内容；点目录进入下一层，右键可复制路径。"
+          />
         )}
       </section>
 
@@ -317,6 +359,12 @@ export function FilesView({ root }: Props) {
           >
             在资源管理器中显示
           </button>
+        </div>
+      )}
+
+      {zoom && (
+        <div className="image-zoom-overlay" onClick={() => setZoom(null)}>
+          <img src={zoom} alt="放大预览" />
         </div>
       )}
     </div>

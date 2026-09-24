@@ -36,8 +36,8 @@ describe("insertTableRow", () => {
     expect(table).not.toBeNull();
     if (!table) return;
 
-    const row = "| 2026-09-18 | Frida Hook 闭环 | [总结](./2026-09-18/总结.md) |";
-    const updated = insertTableRow(raw, table, ["2026-09-18", "Frida Hook 闭环", "[总结](./2026-09-18/总结.md)"]);
+    const row = "| 2026-09-18 | Frida Hook 闭环 | [总结](./2026-09-18/SUMMARY.md) |";
+    const updated = insertTableRow(raw, table, ["2026-09-18", "Frida Hook 闭环", "[总结](./2026-09-18/SUMMARY.md)"]);
     const lines = updated.split("\n");
     const headerIndex = lines.indexOf("| 日期 | 这次做了什么 | 链接 |");
     expect(lines[headerIndex + 2]).toBe(row);
@@ -50,11 +50,11 @@ describe("insertTableRow", () => {
     expect(table).not.toBeNull();
     if (!table) return;
 
-    const row = "| 2026-09-18 | 新 | [总结](./2026-09-18/总结.md) |";
-    const updated = insertTableRow(raw, table, ["2026-09-18", "新", "[总结](./2026-09-18/总结.md)"], "bottom");
+    const row = "| 2026-09-18 | 新 | [总结](./2026-09-18/SUMMARY.md) |";
+    const updated = insertTableRow(raw, table, ["2026-09-18", "新", "[总结](./2026-09-18/SUMMARY.md)"], "bottom");
     expect(updated.replace(`${row}\n`, "")).toBe(raw);
     const lines = updated.split("\n");
-    expect(lines.indexOf(row)).toBe(lines.indexOf("| 2026-09-13 | 对齐转岗背景和方向。 | [总结](./2026-09-13/总结.md) |") + 1);
+    expect(lines.indexOf(row)).toBe(lines.indexOf("| 2026-09-13 | 对齐转岗背景和方向。 | [总结](./2026-09-13/SUMMARY.md) |") + 1);
   });
 });
 
@@ -68,9 +68,9 @@ describe("cells and links", () => {
   });
 
   it("parses markdown links", () => {
-    expect(parseLink("[总结](./2026-09-17/总结.md)")).toEqual({
+    expect(parseLink("[总结](./2026-09-17/SUMMARY.md)")).toEqual({
       text: "总结",
-      target: "./2026-09-17/总结.md",
+      target: "./2026-09-17/SUMMARY.md",
     });
     expect(parseLink("没有链接")).toBeNull();
   });

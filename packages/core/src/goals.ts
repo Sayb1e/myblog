@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { findSection, splitSections } from "./markdown.js";
+import { findSection, splitSections, type Section } from "./markdown.js";
 import { findFirstTable, formatTableRow, splitTableRow } from "./table.js";
 
 export interface Capability {
@@ -18,9 +18,18 @@ export interface GoalsDoc {
   order: string[];
 }
 
-const STAGE_TITLE = "当前阶段";
-const CAPABILITY_TITLE = "能力编号";
-const ORDER_TITLE = "阶段顺序";
+const STAGE_TITLES = ["当前阶段", "阶段"];
+const CAPABILITY_TITLES = ["能力编号", "能力清单", "能力地图", "能力"];
+const ORDER_TITLES = ["阶段顺序", "学习路径", "阶段路径", "顺序"];
+
+/** 标题别名：容忍模型/手写用了近义标题，避免整份地图被静默解析成空 */
+function findSectionAny(sections: Section[], titles: string[]): Section | undefined {
+  for (const title of titles) {
+    const section = findSection(sections, title);
+    if (section) return section;
+  }
+  return undefined;
+}
 
 function parseNumberedList(body: string): string[] {
   return body
@@ -39,11 +48,11 @@ export function activeStageIds(currentStage: string): string[] {
 
 export function parseGoals(raw: string, path = ""): GoalsDoc {
   const sections = splitSections(raw);
-  const currentStage = findSection(sections, STAGE_TITLE)?.body.trim() ?? "";
+  const currentStage = findSectionAny(sections, STAGE_TITLES)?.body.trim() ?? "";
   const stageIds = activeStageIds(currentStage);
 
   const capabilities: Capability[] = [];
-  const capabilitySection = findSection(sections, CAPABILITY_TITLE);
+  const capabilitySection = findSectionAny(sections, CAPABILITY_TITLES);
   if (capabilitySection) {
     const table = findFirstTable(capabilitySection.body, capabilitySection.bodyStart);
     for (const row of table?.rows ?? []) {
@@ -58,7 +67,7 @@ export function parseGoals(raw: string, path = ""): GoalsDoc {
     currentStage,
     stageIds,
     capabilities,
-    order: parseNumberedList(findSection(sections, ORDER_TITLE)?.body ?? ""),
+    order: parseNumberedList(findSectionAny(sections, ORDER_TITLES)?.body ?? ""),
   };
 }
 
@@ -72,7 +81,7 @@ export function getCapability(goals: GoalsDoc, id: string): Capability | undefin
 
 export function updateCapabilityStatus(raw: string, id: string, status: string): string {
   const sections = splitSections(raw);
-  const capabilitySection = findSection(sections, CAPABILITY_TITLE);
+  const capabilitySection = findSectionAny(sections, CAPABILITY_TITLES);
   if (!capabilitySection) return raw;
 
   const table = findFirstTable(capabilitySection.body, capabilitySection.bodyStart);

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ChangeEvent } from "react";
+import { Fragment, useEffect, useMemo, useState, type ChangeEvent } from "react";
 import type { CapabilityStatus } from "@myblog/core";
 import { revealStyle } from "../reveal.js";
 import { Markdown } from "./Markdown.js";
@@ -9,6 +9,9 @@ interface Props {
   onSelect: (id: string | null) => void;
   onSaveStatus: (id: string, status: string) => Promise<void>;
   onInit?: () => void;
+  onDraftGoals?: () => void;
+  /** 日期 -> 该天涉及的 G 编号，用于显示每个能力的真实活跃度 */
+  history?: Map<string, string[]>;
 }
 
 const PRESETS = ["未开始", "进行中", "已闭环", "已通"];
@@ -22,7 +25,28 @@ function level(status: string): 0 | 1 | 2 {
 
 const PERCENT = [6, 55, 100] as const;
 
-export function CapabilityMap({ capabilities, selected, onSelect, onSaveStatus, onInit }: Props) {
+export function CapabilityMap({
+  capabilities,
+  selected,
+  onSelect,
+  onSaveStatus,
+  onInit,
+  onDraftGoals,
+  history,
+}: Props) {
+  const usage = useMemo(() => {
+    const map = new Map<string, { count: number; last: string }>();
+    for (const [date, ids] of history ?? []) {
+      for (const id of ids) {
+        const entry = map.get(id) ?? { count: 0, last: "" };
+        entry.count += 1;
+        if (date > entry.last) entry.last = date;
+        map.set(id, entry);
+      }
+    }
+    return map;
+  }, [history]);
+
   const capability = capabilities.find((entry) => entry.id === selected) ?? null;
   const capped = capabilities.length > LIMIT;
   const [status, setStatus] = useState("");
@@ -60,11 +84,18 @@ export function CapabilityMap({ capabilities, selected, onSelect, onSaveStatus, 
           还没有能力地图。它来自工作区里的 <code className="code">GOALS.md</code> 的「能力编号」表格（编号 / 能力 /
           验证问题 / 当前状态）。没有它也能用：概览与每日总结照常工作，只是阶段与能力进度为空。
         </p>
-        {onInit && (
+        {(onInit || onDraftGoals) && (
           <div className="row">
-            <button type="button" onClick={onInit}>
-              生成 GOALS.md
-            </button>
+            {onDraftGoals && (
+              <button type="button" className="primary" onClick={onDraftGoals}>
+                用模型生成学习目标
+              </button>
+            )}
+            {onInit && (
+              <button type="button" onClick={onInit}>
+                用默认模板
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -84,6 +115,11 @@ export function CapabilityMap({ capabilities, selected, onSelect, onSaveStatus, 
       </div>
       <p className="muted">
         <Markdown inline>{capability.question}</Markdown>
+      </p>
+      <p className="muted cap-detail-usage">
+        {usage.get(capability.id)
+          ? `学习记录里出现 ${usage.get(capability.id)?.count} 天，最近 ${usage.get(capability.id)?.last}`
+          : "学习记录里还没出现"}
       </p>
 
       <label className="cap-status-edit">
@@ -125,11 +161,17 @@ export function CapabilityMap({ capabilities, selected, onSelect, onSaveStatus, 
             {expanded ? "收起" : `展开全部 ${capabilities.length}`}
           </button>
         )}
+        {onDraftGoals && (
+          <button type="button" className="ghost btn-sm" onClick={onDraftGoals} data-tip="用模型按你的想法重写 GOALS.md">
+            生成 / 更新目标…
+          </button>
+        )}
       </div>
 
       <ul className={`capabilities${capped && !expanded ? " capped" : ""}`}>
         {capabilities.map((entry, index) => {
           const stage = level(entry.status);
+          const used = usage.get(entry.id);
           const isActive = selected === entry.id;
           return (
             <Fragment key={entry.id}>
@@ -147,19 +189,29 @@ export function CapabilityMap({ capabilities, selected, onSelect, onSaveStatus, 
                     }
                   }}
                 >
-                  <span className="cap-id">{entry.id}</span>
-                  <span className="cap-name">
-                    {entry.name}
-                    {entry.active && <span className="tag">当前</span>}
-                  </span>
-                  <span className="cap-meter">
-                    <span className={`cap-bar level-${stage}`}>
-                      <i style={{ width: `${PERCENT[stage]}%` }} />
+                  <span className="cap-row cap-row-main">
+                    <span className="cap-id">{entry.id}</span>
+                    <span className="cap-name">
+                      {entry.name}
+                      {entry.active && <span className="tag">当前</span>}
                     </span>
-                    <span className="cap-percent">{PERCENT[stage]}%</span>
+                    <span className="cap-status">
+                      <Markdown inline>{entry.status}</Markdown>
+                    </span>
                   </span>
-                  <span className="cap-status">
-                    <Markdown inline>{entry.status}</Markdown>
+                  <span className="cap-row cap-row-progress">
+                    <span className="cap-meter">
+                      <span className={`cap-bar level-${stage}`}>
+                        <i style={{ width: `${PERCENT[stage]}%` }} />
+                      </span>
+                      <span className="cap-percent">{PERCENT[stage]}%</span>
+                    </span>
+                    <span
+                      className="cap-usage"
+                      title={used ? `出现在 ${used.count} 天，最近 ${used.last}` : "学习记录里还没出现"}
+                    >
+                      {used ? `${used.count} 天` : "—"}
+                    </span>
                   </span>
                 </div>
               </li>

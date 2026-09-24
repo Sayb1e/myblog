@@ -62,6 +62,7 @@ function stubBridge(): void {
     workspaces: { active: status.root, list: [status.root] },
     git: { isRepo: false, branch: "", dirty: 0, lastCommit: "", suggested: "" },
     search: { query: "", hits: [] },
+    plugins: { plugins: [], commands: [] },
   };
 
   (window as { myblog?: unknown }).myblog = {

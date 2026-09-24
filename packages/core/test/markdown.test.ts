@@ -27,7 +27,7 @@ describe("labeled paragraphs", () => {
     const body = section?.body ?? "";
     expect(readLabeledParagraph(body, "学到哪了")).toBe("环境全通（G1）——工具都装好了。");
     expect(readLabeledParagraph(body, "下次从哪继续")).toBe("写脚本 Hook Demo（G3）。");
-    expect(readLabeledParagraph(body, "最近一次")).toBe("[2026-09-17](./2026-09-17/总结.md)");
+    expect(readLabeledParagraph(body, "最近一次")).toBe("[2026-09-17](./2026-09-17/SUMMARY.md)");
     expect(readLabeledParagraph(body, "不存在")).toBe("");
   });
 
@@ -37,7 +37,7 @@ describe("labeled paragraphs", () => {
     expect(updated.split("\n")).toHaveLength(body.split("\n").length);
     expect(updated).toContain("下次从哪继续：新目标");
     expect(updated).toContain("学到哪了：环境全通（G1）——工具都装好了。");
-    expect(updated).toContain("最近一次：[2026-09-17](./2026-09-17/总结.md)");
+    expect(updated).toContain("最近一次：[2026-09-17](./2026-09-17/SUMMARY.md)");
   });
 
   it("appends a label when missing", () => {

@@ -6,6 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createApi, type MyBlogApi } from "../src/handlers.js";
+import { scaffoldWorkspace } from "../src/index.js";
 
 const exec = promisify(execFile);
 const roots: string[] = [];
@@ -123,7 +124,7 @@ describe("search", () => {
     const { root, api } = await makeApi();
     await writeFile(path.join(root, "PROGRESS.md"), "# 总览\n\n学到哪了：装包跑通 DENIED\n", "utf8");
     await mkdir(path.join(root, "2026-09-17"), { recursive: true });
-    await writeFile(path.join(root, "2026-09-17", "总结.md"), "# 2026-09-17\n\n## 这次\n装了 apktool\n", "utf8");
+    await writeFile(path.join(root, "2026-09-17", "SUMMARY.md"), "# 2026-09-17\n\n## 这次\n装了 apktool\n", "utf8");
     await writeFile(path.join(root, "GOALS.md"), "# 目标\n\n## 能力编号\n\n| 编号 | 能力 | 岗位侧在问什么 | 当前状态 |\n|---|---|---|---|\n| G3 | Hook | Frida | 未开始 |\n", "utf8");
 
     const found = (await api.dispatch("search", { query: "apktool" })) as {
@@ -342,6 +343,142 @@ describe("agent config resolution", () => {
     const file = path.join(root, "not-a-dir.txt");
     await writeFile(file, "x", "utf8");
     await expect(api.dispatch("saveStorage", { historyDir: file })).rejects.toThrow("不能是文件");
+  });
+});
+
+describe("agent readiness", () => {
+  async function makeReadyApi(): Promise<MyBlogApi> {
+    const base = await mkdtemp(path.join(tmpdir(), "myblog-ready-"));
+    roots.push(base);
+    const root = path.join(base, "ws");
+    await mkdir(root, { recursive: true });
+    await writeFile(path.join(root, "PROGRESS.md"), "# x\n", "utf8");
+    return createApi({ root, agentConfigPath: path.join(base, "config", "agent.json") });
+  }
+
+  it("有 baseURL/model 但缺 key 时 ready=false，本机地址视为就绪", async () => {
+    const api = await makeReadyApi();
+
+    await api.dispatch("saveAgent", { baseURL: "https://api.example.com/v1", model: "m", apiKey: "" });
+    let view = (await api.dispatch("agent")) as { configured: boolean; ready: boolean; hasApiKey: boolean };
+    expect(view).toMatchObject({ configured: true, hasApiKey: false, ready: false });
+
+    await api.dispatch("saveAgent", { baseURL: "http://127.0.0.1:11434/v1", model: "qwen2.5" });
+    view = (await api.dispatch("agent")) as { configured: boolean; ready: boolean };
+    expect(view).toMatchObject({ configured: true, ready: true });
+  });
+
+  it("testAgent 缺 Base URL / Model 时直接报错，不发起请求", async () => {
+    const api = await makeReadyApi();
+    await expect(api.dispatch("testAgent", { baseURL: "", model: "" })).rejects.toThrow("先填 Base URL 和 Model");
+  });
+});
+
+describe("scaffoldWorkspace", () => {
+  it("在空目录生成 PROGRESS.md / GOALS.md", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "myblog-scaffold-"));
+    roots.push(root);
+
+    const result = await scaffoldWorkspace(root);
+
+    expect(result.created).toEqual(expect.arrayContaining(["PROGRESS.md", "GOALS.md"]));
+    expect(existsSync(path.join(root, "PROGRESS.md"))).toBe(true);
+    expect(existsSync(path.join(root, "GOALS.md"))).toBe(true);
+  });
+});
+
+describe("goals draft", () => {
+  const goals = [
+    "# 学习目标（学习地图，不是进度表）",
+    "",
+    "## 当前阶段",
+    "",
+    "**G1**：打好基础。",
+    "",
+    "## 能力编号",
+    "",
+    "| 编号 | 能力 | 要能回答什么 | 当前状态 |",
+    "|---|---|---|---|",
+    "| G1 | 环境 | 能跑通吗 | 未开始 |",
+    "",
+    "## 阶段顺序",
+    "",
+    "1. **现在**：G1",
+  ].join("\n");
+
+  it("saveGoals 拒绝格式不对的内容，接受合法内容并写盘", async () => {
+    const { root, api } = await makeApi();
+
+    await expect(api.dispatch("saveGoals", { content: "随便写点" })).rejects.toThrow("格式有问题");
+
+    const result = (await api.dispatch("saveGoals", { content: goals })) as { ok: boolean; capabilities: number };
+    expect(result).toMatchObject({ ok: true, capabilities: 1 });
+    expect(await readFile(path.join(root, "GOALS.md"), "utf8")).toBe(goals);
+  });
+
+  it("draftGoals 没写内容或没配模型时直接报错，不发起请求", async () => {
+    const { api } = await makeApi();
+    await expect(api.dispatch("draftGoals", { text: "" })).rejects.toThrow("先写点你想学的内容");
+    await expect(api.dispatch("draftGoals", { text: "我想学点东西" })).rejects.toThrow("先在设置里配置模型");
+  });
+});
+
+describe("plugins", () => {
+  async function makePluginApi(): Promise<MyBlogApi> {
+    const base = await mkdtemp(path.join(tmpdir(), "myblog-plugin-"));
+    roots.push(base);
+    const root = path.join(base, "ws");
+    const pluginDir = path.join(base, "plugins", "demo");
+    await mkdir(root, { recursive: true });
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(path.join(root, "PROGRESS.md"), "# x\n", "utf8");
+    await writeFile(
+      path.join(pluginDir, "plugin.json"),
+      JSON.stringify({ id: "demo", name: "Demo", version: "1.0.0", description: "d" }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(pluginDir, "index.mjs"),
+      [
+        "export default {",
+        "  commands: [{ id: 'ping', title: 'Ping', hint: '插件', run: (ctx) => ({ pong: true, root: ctx.root }) }],",
+        "  tools: [{ name: 'demo_echo', description: 'echo', parameters: { type: 'object', properties: {} }, run: (args) => ({ echo: args }) }],",
+        "  handlers: { demoHello: (payload, ctx) => ({ hello: payload, root: ctx.root }) },",
+        "};",
+      ].join("\n"),
+      "utf8",
+    );
+    return createApi({
+      root,
+      agentConfigPath: path.join(base, "config", "agent.json"),
+      pluginsDir: path.join(base, "plugins"),
+    });
+  }
+
+  it("列出插件与命令", async () => {
+    const api = await makePluginApi();
+    const view = (await api.dispatch("plugins")) as {
+      plugins: { id: string; tools: string[] }[];
+      commands: { id: string; title: string; hint: string }[];
+    };
+    expect(view.plugins).toHaveLength(1);
+    expect(view.plugins[0]).toMatchObject({ id: "demo" });
+    expect(view.commands).toContainEqual({ id: "demo.ping", title: "Ping", hint: "插件" });
+  });
+
+  it("执行插件命令与插件 handler", async () => {
+    const api = await makePluginApi();
+    const pong = (await api.dispatch("runPluginCommand", { id: "demo.ping" })) as { pong: boolean; root: string };
+    expect(pong.pong).toBe(true);
+    expect(pong.root).toContain("ws");
+
+    const hello = (await api.dispatch("demoHello", { a: 1 })) as { hello: { a: number } };
+    expect(hello.hello).toEqual({ a: 1 });
+  });
+
+  it("未知插件命令报错", async () => {
+    const api = await makePluginApi();
+    await expect(api.dispatch("runPluginCommand", { id: "nope" })).rejects.toThrow("未知插件命令");
   });
 });
 

@@ -14,7 +14,7 @@ describe("loadConfig", () => {
     const config = await loadConfig(root);
     expect(config.overview).toBe("PROGRESS.md");
     expect(config.goals).toBe("GOALS.md");
-    expect(config.summaryFile).toBe("总结.md");
+    expect(config.summaryFile).toBe("SUMMARY.md");
   });
 
   it("honours myblog.config.json overrides", async () => {

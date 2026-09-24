@@ -31,11 +31,11 @@ describe("EOL preservation on write", () => {
   });
 
   it("addRecord keeps CRLF and is a pure insertion", () => {
-    const row = "| 2026-09-18 | Frida Hook 闭环 | [总结](./2026-09-18/总结.md) |";
+    const row = "| 2026-09-18 | Frida Hook 闭环 | [总结](./2026-09-18/SUMMARY.md) |";
     const updated = addRecord(crlf, {
       date: "2026-09-18",
       didWhat: "Frida Hook 闭环",
-      link: "./2026-09-18/总结.md",
+      link: "./2026-09-18/SUMMARY.md",
       linkText: "总结",
     });
     expect(loneLf(updated)).toBe(0);

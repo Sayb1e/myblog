@@ -15,10 +15,13 @@ export const DEFAULT_CONFIG: Omit<WorkspaceConfig, "root"> = {
   overview: "PROGRESS.md",
   goals: "GOALS.md",
   dailyDirPattern: "YYYY-MM-DD",
-  summaryFile: "总结.md",
+  summaryFile: "SUMMARY.md",
   skillPrefix: "G",
   configFile: "myblog.config.json",
 };
+
+/** 每日总结的旧默认文件名，读取/迁移时兼容 */
+export const LEGACY_SUMMARY_FILE = "总结.md";
 
 export async function loadConfig(root: string, override: Partial<WorkspaceConfig> = {}): Promise<WorkspaceConfig> {
   const absoluteRoot = path.resolve(root);

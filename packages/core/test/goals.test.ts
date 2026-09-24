@@ -15,6 +15,28 @@ describe("parseGoals", () => {
   });
 });
 
+describe("parseGoals heading aliases", () => {
+  it("accepts near-synonym section titles so a generated map is not silently empty", () => {
+    const doc = [
+      "# 学习目标（学习地图，不是进度表）",
+      "## 阶段",
+      "**G2**：继续推进。",
+      "## 能力清单",
+      "| 编号 | 能力 | 要能回答什么 | 当前状态 |",
+      "|---|---|---|---|",
+      "| G1 | 环境 | 能跑通吗 | 已闭环 |",
+      "## 学习路径",
+      "1. 现在：G1",
+    ].join("\n");
+
+    const goals = parseGoals(doc);
+    expect(goals.stageIds).toEqual(["G2"]);
+    expect(goals.capabilities).toHaveLength(1);
+    expect(getCapability(goals, "G1")).toMatchObject({ name: "环境", status: "已闭环" });
+    expect(goals.order).toEqual(["现在：G1"]);
+  });
+});
+
 describe("activeStageIds", () => {
   it("prefers the bold current stage and ignores closed stages", () => {
     expect(activeStageIds("**G3**：真机动态 Hook（G2 已于 09-17 闭环）。")).toEqual(["G3"]);

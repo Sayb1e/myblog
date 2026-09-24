@@ -1,6 +1,15 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import type { ProgressSnapshot } from "@myblog/core";
-import { errorMessage, patchProgress, searchWorkspace, setCapabilityStatus } from "./api.js";
+import {
+  errorMessage,
+  getAgentConfig,
+  getPlugins,
+  patchProgress,
+  runPluginCommand,
+  scaffoldDay,
+  searchWorkspace,
+  setCapabilityStatus,
+} from "./api.js";
 import {
   addWorkspace,
   commitGit,
@@ -18,10 +27,13 @@ import { ChatView } from "./components/ChatView.js";
 import { CheckView } from "./components/CheckView.js";
 import { CommandPalette, type Command } from "./components/CommandPalette.js";
 import { DailyView } from "./components/DailyView.js";
+import { EmptyState } from "./components/EmptyState.js";
 import { FilesView } from "./components/FilesView.js";
 import { GitCard } from "./components/GitCard.js";
+import { GoalsGenerator } from "./components/GoalsGenerator.js";
 import { IconPencil, IconTrash } from "./components/icons.js";
 import { MarkdownProvider } from "./components/Markdown.js";
+import { Onboarding } from "./components/Onboarding.js";
 import { ProgressCard } from "./components/ProgressCard.js";
 import { SettingsView } from "./components/SettingsView.js";
 import { type SelectOption } from "./components/Select.js";
@@ -32,6 +44,7 @@ import { Timeline } from "./components/Timeline.js";
 import { TodayCard } from "./components/TodayCard.js";
 import { TooltipLayer } from "./components/Tooltip.js";
 import { WindowControls } from "./components/WindowControls.js";
+import { WorkspaceFilesHelp } from "./components/WorkspaceFilesHelp.js";
 import { useToast } from "./hooks/useToasts.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { usePrefs } from "./prefs.js";
@@ -66,6 +79,13 @@ export function App() {
   const [manageValue, setManageValue] = useState("");
   const [manageRemoving, setManageRemoving] = useState<string | null>(null);
   const [visited, setVisited] = useState<Partial<Record<View, boolean>>>({ overview: true });
+  const [modelReady, setModelReady] = useState(false);
+  const [goalsOpen, setGoalsOpen] = useState(false);
+  const [pluginCommands, setPluginCommands] = useState<{ id: string; title: string; hint: string }[]>([]);
+  const [chatted, setChatted] = useState(() => localStorage.getItem("myblog:onboard:chatted") === "1");
+  const [onboardDismissed, setOnboardDismissed] = useState(
+    () => localStorage.getItem("myblog:onboard:dismissed") === "1",
+  );
 
   useEffect(() => {
     if (!prefs.chatEnabled && view === "chat") setView("overview");
@@ -134,6 +154,28 @@ export function App() {
       .catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    void getPlugins()
+      .then((view) => setPluginCommands(Array.isArray(view?.commands) ? view.commands : []))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const load = (): void => {
+      void getAgentConfig()
+        .then((view) => setModelReady(view.ready))
+        .catch(() => undefined);
+    };
+    load();
+    const onChat = (): void => setChatted(true);
+    window.addEventListener("myblog:agent-changed", load);
+    window.addEventListener("myblog:chatted", onChat);
+    return () => {
+      window.removeEventListener("myblog:agent-changed", load);
+      window.removeEventListener("myblog:chatted", onChat);
+    };
+  }, []);
+
   const changeWorkspace = async (target: string): Promise<void> => {
     if (!target || target === status?.root) return;
     try {
@@ -162,6 +204,23 @@ export function App() {
       const result = await initWorkspace();
       toast("success", result.created.length > 0 ? `已创建：${result.created.join("、")}` : "文件已存在");
       await refresh();
+    } catch (caught) {
+      toast("error", errorMessage(caught));
+    }
+  };
+
+  const todayString = (): string => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  };
+
+  const writeToday = async (): Promise<void> => {
+    const target = todayString();
+    try {
+      const result = await scaffoldDay(target);
+      toast(result.created ? "success" : "info", result.created ? "已新建今日总结" : "今日总结已存在");
+      await refresh();
+      openDate(target);
     } catch (caught) {
       toast("error", errorMessage(caught));
     }
@@ -233,6 +292,34 @@ export function App() {
       label: prefs.sidebarCollapsed ? "展开侧栏" : "收起侧栏",
       run: () => setPref("sidebarCollapsed", !prefs.sidebarCollapsed),
     });
+    list.push({
+      id: "action:signature",
+      label: prefs.signatureEnabled ? "关闭个性签名" : "开启个性签名",
+      hint: prefs.signature || undefined,
+      run: () => setPref("signatureEnabled", !prefs.signatureEnabled),
+    });
+    list.push({ id: "action:write-today", label: "写今天的总结", hint: "scaffold", run: () => void writeToday() });
+    list.push({ id: "action:goals", label: "生成 / 更新学习目标", hint: "GOALS.md", run: () => setGoalsOpen(true) });
+    for (const entry of workspaces?.list ?? []) {
+      if (entry === status?.root) continue;
+      list.push({
+        id: `ws:${entry}`,
+        label: `切换工作区：${workspaceName(entry)}`,
+        run: () => void changeWorkspace(entry),
+      });
+    }
+    for (const command of pluginCommands) {
+      list.push({
+        id: `plugin:${command.id}`,
+        label: command.title,
+        hint: command.hint || "插件",
+        run: () => {
+          void runPluginCommand(command.id)
+            .then(() => toast("success", `已执行：${command.title}`))
+            .catch((caught) => toast("error", errorMessage(caught)));
+        },
+      });
+    }
     for (const summary of summaries.slice(0, 6)) {
       list.push({
         id: `date:${summary.date}`,
@@ -242,7 +329,7 @@ export function App() {
       });
     }
     return list;
-  }, [openDate, prefs, refresh, setPref, summaries]);
+  }, [openDate, prefs, pluginCommands, refresh, setPref, summaries, toast, workspaces, status?.root]);
 
   const saveProgress = useCallback(
     async (patch: Partial<ProgressSnapshot>) => {
@@ -304,6 +391,9 @@ export function App() {
           onDoubleClick={() => window.myblog?.windowControls?.toggleMaximize()}
         >
           <h1>{TITLES[view]}</h1>
+          {prefs.signatureEnabled && prefs.signature.trim() !== "" && (
+            <span className="topbar-signature">{prefs.signature}</span>
+          )}
           <WindowControls />
         </div>
 
@@ -318,17 +408,47 @@ export function App() {
                   <SkeletonCard lines={5} />
                 </div>
               )}
-              {status && !initialized && (
-                <section className="card empty-state">
-                  <div className="empty-mark">M</div>
-                  <h2>这个文件夹还不是学习仓</h2>
-                  <p className="muted">
-                    没有找到「PROGRESS.md」。可以一键生成最小结构（学习进度总览 + 岗位目标），之后即可规划与写回；也可以先去「对话」里随便聊聊。
-                  </p>
-                  <button type="button" className="primary" onClick={() => void bootstrap()}>
-                    初始化工作区
-                  </button>
-                </section>
+              {status && (
+                <Onboarding
+                  workspace={workspace}
+                  initialized={initialized}
+                  modelReady={modelReady}
+                  hasChatted={chatted}
+                  dismissed={onboardDismissed}
+                  onInit={() => void bootstrap()}
+                  onOpenModel={() => {
+                    setView("chat");
+                    window.dispatchEvent(new Event("myblog:open-agent-settings"));
+                  }}
+                  onOpenChat={() => setView("chat")}
+                  onDraftGoals={() => setGoalsOpen(true)}
+                  onDismiss={() => {
+                    setOnboardDismissed(true);
+                    try {
+                      localStorage.setItem("myblog:onboard:dismissed", "1");
+                    } catch {
+                      // localStorage unavailable
+                    }
+                  }}
+                />
+              )}
+              {status && !initialized && onboardDismissed && (
+                <EmptyState
+                  className="card"
+                  mark="M"
+                  title="这个文件夹还不是学习仓"
+                  description="没有找到「PROGRESS.md」。可以一键生成最小结构，之后即可规划与写回；也可以先去「对话」里随便聊聊。"
+                >
+                  <WorkspaceFilesHelp />
+                  <div className="row">
+                    <button type="button" className="primary" onClick={() => void bootstrap()}>
+                      初始化工作区
+                    </button>
+                    <button type="button" onClick={() => setGoalsOpen(true)}>
+                      用模型生成学习目标
+                    </button>
+                  </div>
+                </EmptyState>
               )}
               {initialized && today && (
                 <TodayCard
@@ -337,6 +457,7 @@ export function App() {
                   onOpenDate={openDate}
                   onOpenPalette={() => setPaletteOpen(true)}
                   onInit={() => void bootstrap()}
+                  onWriteToday={() => void writeToday()}
                 />
               )}
               {initialized && (
@@ -349,6 +470,8 @@ export function App() {
                       onSelect={setSkill}
                       onSaveStatus={saveCapability}
                       onInit={() => void bootstrap()}
+                      onDraftGoals={() => setGoalsOpen(true)}
+                      history={skillsByDate}
                     />
                   )}
                   {status && (
@@ -514,6 +637,28 @@ export function App() {
           </div>
         </div>
       )}
+
+      <GoalsGenerator
+        open={goalsOpen}
+        modelReady={modelReady}
+        onOpenModel={() => {
+          setView("chat");
+          window.dispatchEvent(new Event("myblog:open-agent-settings"));
+        }}
+        onSaved={() => {
+          void (async () => {
+            if (!initialized) {
+              try {
+                await initWorkspace();
+              } catch {
+                // 已初始化或权限问题，忽略
+              }
+            }
+            await refresh();
+          })();
+        }}
+        onClose={() => setGoalsOpen(false)}
+      />
 
       <CommandPalette
         open={paletteOpen}

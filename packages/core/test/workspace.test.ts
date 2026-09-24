@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Workspace } from "../src/workspace.js";
@@ -34,6 +34,53 @@ describe("Workspace.scaffoldDay", () => {
     const second = await workspace.scaffoldDay("2026-09-18");
     expect(second.created).toBe(false);
     expect(readFileSync(first.path, "utf8")).toBe(content);
+  });
+});
+
+describe("Workspace.backup", () => {
+  it("keeps a copy of the overview before closeDay overwrites it", async () => {
+    const workspace = await Workspace.load(root);
+    const before = readFileSync(workspace.overviewPath, "utf8");
+
+    await workspace.closeDay({ date: "2026-09-18", learned: "x", next: "y", didWhat: "z" });
+
+    const dir = path.join(root, ".myblog", "backups");
+    const copies = readdirSync(dir).filter((name) => name.startsWith("PROGRESS.md.") && name.endsWith(".bak"));
+    expect(copies).toHaveLength(1);
+    expect(readFileSync(path.join(dir, copies[0] ?? ""), "utf8")).toBe(before);
+  });
+
+  it("backs up GOALS.md before a capability status write", async () => {
+    const workspace = await Workspace.load(root);
+    await workspace.setCapabilityStatus("G3", "进行中");
+
+    const dir = path.join(root, ".myblog", "backups");
+    const copies = readdirSync(dir).filter((name) => name.startsWith("GOALS.md."));
+    expect(copies.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Workspace.migrateLegacySummary", () => {
+  it("renames legacy 总结.md and rewrites overview links", async () => {
+    for (const date of ["2026-09-13", "2026-09-17"]) {
+      await rename(path.join(root, date, "SUMMARY.md"), path.join(root, date, "总结.md"));
+    }
+    const original = await Workspace.load(root);
+    const legacyOverview = readFileSync(original.overviewPath, "utf8").split("SUMMARY.md").join("总结.md");
+    await writeFile(original.overviewPath, legacyOverview, "utf8");
+
+    const workspace = await Workspace.load(root);
+    const migrated = await workspace.migrateLegacySummary();
+
+    expect(migrated.sort()).toEqual(["2026-09-13", "2026-09-17"]);
+    expect(existsSync(path.join(root, "2026-09-17", "SUMMARY.md"))).toBe(true);
+    expect(existsSync(path.join(root, "2026-09-17", "总结.md"))).toBe(false);
+    expect(readFileSync(workspace.overviewPath, "utf8")).not.toContain("总结.md");
+  });
+
+  it("is a no-op when the configured summary file is still 总结.md", async () => {
+    const workspace = await Workspace.load(root, { summaryFile: "总结.md" });
+    expect(await workspace.migrateLegacySummary()).toEqual([]);
   });
 });
 

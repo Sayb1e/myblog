@@ -1,6 +1,6 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { loadConfig, type WorkspaceConfig } from "./config.js";
+import { LEGACY_SUMMARY_FILE, loadConfig, type WorkspaceConfig } from "./config.js";
 import { detectEol } from "./markdown.js";
 import { readGoals, type GoalsDoc } from "./goals.js";
 import { parseGoals, updateCapabilityStatus } from "./goals.js";
@@ -42,6 +42,8 @@ export interface CloseDayResult {
 export interface CloseDayOptions {
   dryRun?: boolean;
 }
+
+const DATE_DIR = /^\d{4}-\d{2}-\d{2}$/;
 
 async function pathExists(target: string): Promise<boolean> {
   try {
@@ -108,14 +110,102 @@ export class Workspace {
     return pathExists(this.goalsPath);
   }
 
+  private backupsDir(): string {
+    return path.join(this.config.root, ".myblog", "backups");
+  }
+
+  /** 覆盖写之前先留一份备份到 `.myblog/backups/`，失败不阻塞写入 */
+  async backup(target: string): Promise<string | null> {
+    let content: Buffer;
+    try {
+      content = await readFile(target);
+    } catch {
+      return null;
+    }
+    const rel = path.relative(this.config.root, target) || path.basename(target);
+    const safe = rel.split(path.sep).join("__");
+    const dir = this.backupsDir();
+    try {
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, ".gitignore"), "*\n", "utf8");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const dest = path.join(dir, `${safe}.${stamp}.bak`);
+      await writeFile(dest, content);
+      await this.pruneBackups(safe);
+      return dest;
+    } catch {
+      return null;
+    }
+  }
+
+  private async pruneBackups(safe: string, keep = 20): Promise<void> {
+    try {
+      const dir = this.backupsDir();
+      const names = (await readdir(dir))
+        .filter((name) => name.startsWith(`${safe}.`) && name.endsWith(".bak"))
+        .sort();
+      for (const name of names.slice(0, Math.max(0, names.length - keep))) {
+        await rm(path.join(dir, name), { force: true });
+      }
+    } catch {
+      // 备份清理失败无所谓
+    }
+  }
+
+  /** 把旧的 `总结.md` 迁移为配置里的 summaryFile（默认 SUMMARY.md），并同步总览里的链接；幂等 */
+  async migrateLegacySummary(): Promise<string[]> {
+    const target = this.config.summaryFile;
+    if (target === LEGACY_SUMMARY_FILE) return [];
+
+    let entries;
+    try {
+      entries = await readdir(this.config.root, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    const migrated: string[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !DATE_DIR.test(entry.name)) continue;
+      const legacy = path.join(this.config.root, entry.name, LEGACY_SUMMARY_FILE);
+      const dest = path.join(this.config.root, entry.name, target);
+      if (!(await pathExists(legacy)) || (await pathExists(dest))) continue;
+      try {
+        await this.backup(legacy);
+        await rename(legacy, dest);
+        migrated.push(entry.name);
+      } catch {
+        // 迁移失败不阻塞读取
+      }
+    }
+
+    if (migrated.length > 0) {
+      try {
+        const raw = await readFile(this.overviewPath, "utf8");
+        const next = raw.split(LEGACY_SUMMARY_FILE).join(target);
+        if (next !== raw) {
+          await this.backup(this.overviewPath);
+          await writeFile(this.overviewPath, next, "utf8");
+        }
+      } catch {
+        // 总览不存在或不可写，忽略
+      }
+    }
+    return migrated;
+  }
+
   async setCapabilityStatus(id: string, status: string): Promise<{ changed: boolean }> {
     const raw = await readFile(this.goalsPath, "utf8");
     const next = updateCapabilityStatus(raw, id, status);
-    if (next !== raw) await writeFile(this.goalsPath, next, "utf8");
+    if (next !== raw) {
+      await this.backup(this.goalsPath);
+      await writeFile(this.goalsPath, next, "utf8");
+    }
     return { changed: next !== raw };
   }
 
   async readStatusSafe(): Promise<{ initialized: boolean; status: WorkspaceStatus | null }> {
+    await this.migrateLegacySummary();
     if (!(await this.hasOverview())) return { initialized: false, status: null };
     const overview = await this.readOverview();
     let goals: GoalsDoc;
@@ -149,10 +239,12 @@ export class Workspace {
   }
 
   async check(): Promise<CheckResult> {
+    await this.migrateLegacySummary();
     return checkWorkspace(this.config);
   }
 
   async scaffoldDay(date: string, options: ScaffoldOptions = {}): Promise<ScaffoldDayResult> {
+    await this.migrateLegacySummary();
     const file = this.summaryPath(date);
     await mkdir(this.dayDir(date), { recursive: true });
     if (await pathExists(file)) return { created: false, path: file };
@@ -169,6 +261,7 @@ export class Workspace {
   }
 
   async closeDay(input: CloseDayInput, options: CloseDayOptions = {}): Promise<CloseDayResult> {
+    await this.migrateLegacySummary();
     const raw = await readFile(this.overviewPath, "utf8");
     const before = parseOverview(raw, this.overviewPath);
 
@@ -208,7 +301,10 @@ export class Workspace {
     }
 
     const overviewChanged = next !== raw;
-    if (overviewChanged && !options.dryRun) await writeFile(this.overviewPath, next, "utf8");
+    if (overviewChanged && !options.dryRun) {
+      await this.backup(this.overviewPath);
+      await writeFile(this.overviewPath, next, "utf8");
+    }
 
     return options.dryRun
       ? { overviewChanged, progressUpdated, recordAdded, preview: next }

@@ -14,7 +14,7 @@ export function registerInit(program: Command): void {
     .description("把学习循环模板写入工作区（opencode / claude / cursor / AGENTS.md）")
     .option("-a, --agent <list>", "逗号分隔：opencode,claude,cursor,agents,all", "all")
     .option("--force", "覆盖已存在的命令 / skill 文件")
-    .option("-w, --workspace", "同时初始化学习仓结构（总览 / 岗位目标，缺失时创建）")
+    .option("-w, --workspace", "同时初始化学习仓结构（总览 / 学习目标，缺失时创建）")
     .action(async (options: InitCliOptions) => {
       const root = rootOf(program);
       const agents = parseAgents(options.agent);

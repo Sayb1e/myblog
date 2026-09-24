@@ -2,7 +2,7 @@ export function scaffoldOverview(): string {
   return [
     "# 学习总览",
     "",
-    "> 总索引：背景、方向、学到哪、下次从哪继续。细节写在各日期目录的 `总结.md`。",
+    "> 总索引：背景、方向、学到哪、下次从哪继续。细节写在各日期目录的 `SUMMARY.md`。",
     "",
     "---",
     "",
@@ -66,7 +66,7 @@ export function scaffoldOverview(): string {
 
 export function scaffoldGoals(): string {
   return [
-    "# 岗位目标（学习地图，不是进度表）",
+    "# 学习目标（学习地图，不是进度表）",
     "",
     "---",
     "",
@@ -78,7 +78,7 @@ export function scaffoldGoals(): string {
     "",
     "## 能力编号",
     "",
-    "| 编号 | 能力 | 岗位侧在问什么 | 当前状态 |",
+    "| 编号 | 能力 | 要能回答什么 | 当前状态 |",
     "|---|---|---|---|",
     "| G1 | 环境 | 工具与环境是否可用 | 未开始 |",
     "| G2 | 基础 | 核心概念与最小闭环 | 未开始 |",

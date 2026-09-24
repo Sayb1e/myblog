@@ -17,6 +17,9 @@ export interface Prefs {
   animations: boolean;
   codeHighlight: boolean;
   compact: boolean;
+  signatureEnabled: boolean;
+  signature: string;
+  contextLimit: number;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -31,6 +34,9 @@ export const DEFAULT_PREFS: Prefs = {
   animations: true,
   codeHighlight: true,
   compact: false,
+  signatureEnabled: false,
+  signature: "",
+  contextLimit: 128000,
 };
 
 const STORAGE_KEY = "myblog:prefs";

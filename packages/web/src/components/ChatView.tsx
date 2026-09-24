@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   activateSession,
   createSession,
@@ -6,11 +6,12 @@ import {
   errorMessage,
   getAgentConfig,
   getChatHistory,
-  getOpencodeAuth,
   getSessions,
-  importOpencode,
+  getSummaries,
+  getSummary,
   renameSession,
   saveAgentConfig,
+  testAgent,
   bindWorkspaceProfile,
   deleteAgentProfile,
   saveChatHistory,
@@ -18,12 +19,14 @@ import {
   type AgentView,
   type ChatEvent,
   type ChatMessageRecord,
-  type OpencodeAuthView,
   type SessionMeta,
 } from "../api.js";
+import { AGENT_PRESETS as PRESETS } from "../agentPresets.js";
 import { useToast } from "../hooks/useToasts.js";
+import { usePrefs } from "../prefs.js";
 import { IconArrowDown, IconPencil, IconPlus, IconSpark, IconTrash } from "./icons.js";
 import { Markdown } from "./Markdown.js";
+import { Modal } from "./Modal.js";
 import { Select } from "./Select.js";
 import { Spinner } from "./Spinner.js";
 
@@ -39,20 +42,29 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   tools: ToolCard[];
+  ms?: number;
 }
 
-const PRESETS: { id: string; label: string; baseURL: string; model: string }[] = [
-  { id: "opencode-go", label: "OpenCode Go", baseURL: "https://opencode.ai/zen/go/v1", model: "grok-4.6" },
-  { id: "opencode-zen", label: "OpenCode Zen", baseURL: "https://opencode.ai/zen/v1", model: "grok-code" },
-  { id: "openai", label: "OpenAI", baseURL: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-  { id: "deepseek", label: "DeepSeek", baseURL: "https://api.deepseek.com/v1", model: "deepseek-chat" },
-  { id: "dashscope", label: "通义千问", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
-  { id: "moonshot", label: "Kimi / Moonshot", baseURL: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
-  { id: "zhipu", label: "智谱 GLM", baseURL: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
-  { id: "openrouter", label: "OpenRouter", baseURL: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
-  { id: "ollama", label: "本地 Ollama", baseURL: "http://127.0.0.1:11434/v1", model: "qwen2.5" },
-  { id: "custom", label: "自定义", baseURL: "", model: "" },
-];
+function formatMs(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+/** 粗略估算 token：CJK 约 1 字 1 token，其余约 4 字符 1 token */
+const SYSTEM_OVERHEAD_TOKENS = 1200;
+
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  let cjk = 0;
+  for (const char of text) {
+    if (/[\u3400-\u9fff\uf900-\ufaff\u3000-\u30ff]/.test(char)) cjk += 1;
+  }
+  const other = Math.max(0, text.length - cjk);
+  return Math.ceil(cjk + other / 4);
+}
+
+function formatTokens(value: number): string {
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
+}
 
 const TOOL_META: Record<string, { label: string; icon: string; write?: boolean }> = {
   myblog_context: { label: "读取工作区", icon: "◈" },
@@ -151,24 +163,25 @@ function CopyButton({ text, label = "复制" }: { text: string; label?: string }
 
 export function ChatView() {
   const toast = useToast();
+  const { prefs } = usePrefs();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [config, setConfig] = useState<AgentView | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [opencode, setOpencode] = useState<OpencodeAuthView | null>(null);
+
   const [saveTarget, setSaveTarget] = useState("default");
   const [newProfileName, setNewProfileName] = useState("");
   const [workspaceBinding, setWorkspaceBinding] = useState("");
   const [format, setFormat] = useState<"auto" | "openai" | "anthropic">("auto");
-  const [importProvider, setImportProvider] = useState<string | null>(null);
-  const [importModel, setImportModel] = useState("");
   const [baseURL, setBaseURL] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [testing, setTesting] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [activeSession, setActiveSession] = useState("");
+  const [quoteDates, setQuoteDates] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -177,11 +190,40 @@ export function ChatView() {
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const lastAssistantId = [...messages].reverse().find((message) => message.role === "assistant")?.id ?? -1;
+  const contextLimit = prefs.contextLimit > 0 ? prefs.contextLimit : 128000;
+  const usedTokens = useMemo(() => {
+    let total = SYSTEM_OVERHEAD_TOKENS;
+    for (const message of messages) {
+      total += estimateTokens(message.content);
+      for (const tool of message.tools) {
+        total += estimateTokens(tool.args);
+        if (tool.result !== undefined) {
+          try {
+            total += estimateTokens(JSON.stringify(tool.result));
+          } catch {
+            // 忽略无法序列化的结果
+          }
+        }
+      }
+    }
+    return total;
+  }, [messages]);
+  const contextRatio = Math.min(1, usedTokens / contextLimit);
+  const contextLevel = contextRatio >= 0.85 ? "high" : contextRatio >= 0.6 ? "warn" : "ok";
+  const saveTargetLabel =
+    saveTarget === "workspace-file"
+      ? "工作区文件 myblog.agent.json"
+      : saveTarget.startsWith("profile:")
+        ? `配置档「${saveTarget.slice("profile:".length)}」`
+        : saveTarget === "new-profile"
+          ? "新建配置档"
+          : "全局默认配置";
 
   const loadConfig = useCallback(async () => {
     try {
       const next = await getAgentConfig();
       setConfig(next);
+      window.dispatchEvent(new Event("myblog:agent-changed"));
       setBaseURL(next.baseURL);
       setModel(next.model);
       setSaveTarget(
@@ -204,25 +246,16 @@ export function ChatView() {
   }, [loadConfig]);
 
   useEffect(() => {
-    if (!settingsOpen) return;
-    void getOpencodeAuth()
-      .then(setOpencode)
-      .catch(() => setOpencode(null));
-  }, [settingsOpen]);
+    void getSummaries()
+      .then((list) => setQuoteDates(list.map((summary) => summary.date)))
+      .catch(() => undefined);
+  }, []);
 
-  const importFromOpencode = async (provider: string, model?: string): Promise<void> => {
-    try {
-      const result = await importOpencode(provider, model);
-      setBaseURL(result.baseURL);
-      setModel(result.model);
-      setApiKey("");
-      setFormat(result.format === "anthropic" ? "anthropic" : result.format === "openai" ? "openai" : "auto");
-      toast("success", `已导入 ${result.provider} / ${result.model}`);
-      await loadConfig();
-    } catch (caught) {
-      toast("error", errorMessage(caught));
-    }
-  };
+  useEffect(() => {
+    const open = (): void => setSettingsOpen(true);
+    window.addEventListener("myblog:open-agent-settings", open);
+    return () => window.removeEventListener("myblog:open-agent-settings", open);
+  }, []);
 
   const loadActive = useCallback(async (): Promise<void> => {
     const stored = await getChatHistory();
@@ -300,6 +333,7 @@ export function ChatView() {
         ...(profileName !== "" ? { profile: profileName } : {}),
       });
       setConfig(next);
+      window.dispatchEvent(new Event("myblog:agent-changed"));
       setApiKey("");
       if (target === "profile") {
         setSaveTarget(`profile:${profileName}`);
@@ -308,6 +342,18 @@ export function ChatView() {
       toast("success", target === "profile" ? `已保存到配置档「${profileName}」` : "已保存");
     } catch (caught) {
       toast("error", errorMessage(caught));
+    }
+  };
+
+  const testConnection = async (): Promise<void> => {
+    setTesting(true);
+    try {
+      const result = await testAgent({ baseURL, model, ...(apiKey ? { apiKey } : {}), format });
+      toast("success", `连接成功：${result.message}`);
+    } catch (caught) {
+      toast("error", `连接失败：${errorMessage(caught)}`);
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -398,6 +444,7 @@ export function ChatView() {
     assistantId: number,
   ): Promise<void> => {
     setStreaming(true);
+    const started = performance.now();
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -442,14 +489,50 @@ export function ChatView() {
     } catch (caught) {
       if ((caught as Error).name !== "AbortError") toast("error", errorMessage(caught));
     } finally {
+      const elapsed = performance.now() - started;
+      setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, ms: elapsed } : message)));
       setStreaming(false);
       abortRef.current = null;
+    }
+  };
+
+  const quoteSummary = async (date: string): Promise<void> => {
+    if (!date) return;
+    try {
+      const result = await getSummary(date);
+      if (!result.exists || !result.summary) {
+        toast("info", `没有 ${date} 的总结`);
+        return;
+      }
+      const body = result.summary.raw
+        .trim()
+        .split("\n")
+        .map((line) => `> ${line}`)
+        .join("\n");
+      setInput((current) => `${current}${current ? "\n\n" : ""}> 摘自 ${date} 的总结：\n${body}\n\n`);
+    } catch (caught) {
+      toast("error", errorMessage(caught));
     }
   };
 
   const send = async (override?: string): Promise<void> => {
     const text = (override ?? input).trim();
     if (!text || streaming) return;
+
+    if (!config?.ready) {
+      setSettingsOpen(true);
+      toast("info", config?.configured ? "还差 API Key：在设置里填一个再发" : "先在设置里配置模型");
+      return;
+    }
+
+    if (localStorage.getItem("myblog:onboard:chatted") !== "1") {
+      try {
+        localStorage.setItem("myblog:onboard:chatted", "1");
+      } catch {
+        // localStorage unavailable
+      }
+      window.dispatchEvent(new Event("myblog:chatted"));
+    }
 
     const userMessage: Message = { id: nextId++, role: "user", content: text, tools: [] };
     const assistantId = nextId++;
@@ -499,10 +582,16 @@ export function ChatView() {
       <div className="chat-head">
         <div className="chat-model">
           <span className="chat-model-name">
-            <span className={`model-dot ${config?.configured ? "on" : "off"}`} />
-            {config?.configured ? config.model : "未配置模型"}
+            <span className={`model-dot ${config?.ready ? "on" : "off"}`} />
+            {config?.ready ? config.model : config?.configured ? "缺 API Key" : "未配置模型"}
           </span>
-          <span className="muted">{config?.configured ? config.baseURL : "在设置里填 baseURL / model / key"}</span>
+          <span className="muted">
+            {config?.ready
+              ? config.baseURL
+              : config?.configured
+                ? "点「设置」填 API Key，或点「测试连接」看看"
+                : "点「设置」填 baseURL / model / key"}
+          </span>
         </div>
         <div className="chat-actions">
           <Select
@@ -525,6 +614,15 @@ export function ChatView() {
           >
             <IconTrash />
           </button>
+          <Select
+            value=""
+            placeholder="引用总结"
+            options={[
+              { value: "", label: "引用某天总结…" },
+              ...quoteDates.slice(0, 30).map((entry) => ({ value: entry, label: entry })),
+            ]}
+            onChange={(value) => void quoteSummary(value)}
+          />
           <button type="button" onClick={exportChat} disabled={messages.length === 0}>
             导出
           </button>
@@ -534,27 +632,41 @@ export function ChatView() {
         </div>
       </div>
 
-      {settingsOpen && (
-        <div className="card chat-settings">
-          <div className="row chat-settings-head">
-            <span className="chip">
-              当前生效：
-              {config?.source === "env"
-                ? "环境变量"
-                : config?.source === "workspace-file"
-                  ? "工作区文件"
-                  : config?.source === "profile"
-                    ? `配置档「${config.profile}」`
-                    : "默认配置"}
-              （{config?.format === "anthropic" ? "Anthropic" : "OpenAI 兼容"}）
-            </span>
-            {config?.workspaceFile && (
-              <span className="muted chat-settings-file" data-tip={config.workspaceFile}>
-                工作区文件优先：myblog.agent.json
+      <Modal
+        open={settingsOpen}
+        className="chat-settings-modal"
+        title="对话设置"
+        onClose={() => setSettingsOpen(false)}
+      >
+        <div className="dialog-body chat-settings">
+          <div className="settings-summary">
+            <span className={`model-dot ${config?.ready ? "on" : "off"}`} />
+            <div className="settings-summary-text">
+              <span className="settings-summary-title">
+                当前生效：
+                {config?.source === "env"
+                  ? "环境变量"
+                  : config?.source === "workspace-file"
+                    ? "工作区文件"
+                    : config?.source === "profile"
+                      ? `配置档「${config.profile}」`
+                      : "默认配置"}
+                <span className="muted"> · {config?.format === "anthropic" ? "Anthropic" : "OpenAI 兼容"}</span>
               </span>
-            )}
+              {config?.configured && !config.ready ? (
+                <span className="warn-text">还缺 API Key，填完点「测试连接」验证一下</span>
+              ) : (
+                config?.workspaceFile && (
+                  <span className="muted" data-tip={config.workspaceFile}>
+                    来源文件：myblog.agent.json
+                  </span>
+                )
+              )}
+            </div>
           </div>
 
+          <section className="settings-group">
+            <h4 className="settings-group-title">连接</h4>
           <label>
             服务商预设
             <Select
@@ -602,7 +714,10 @@ export function ChatView() {
               onChange={(value) => setFormat(value as "auto" | "openai" | "anthropic")}
             />
           </label>
+          </section>
 
+          <details className="settings-group">
+            <summary className="settings-group-title">保存位置：{saveTargetLabel}</summary>
           <label>
             保存到
             <Select
@@ -638,60 +753,13 @@ export function ChatView() {
               onChange={(value) => void changeBinding(value)}
             />
           </label>
+          {config && <p className="muted settings-path">配置文件：{config.configPath}</p>}
+          </details>
 
-          {opencode && opencode.available.length > 0 && (
-            <div className="opencode-import">
-              <span className="muted">检测到 opencode 登录（导入后写入「默认配置」）：</span>
-              {opencode.available.map((entry) => (
-                <div key={entry.id} className="opencode-provider">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (importProvider === entry.id) {
-                        setImportProvider(null);
-                        return;
-                      }
-                      setImportProvider(entry.id);
-                      setImportModel(entry.model);
-                    }}
-                  >
-                    {entry.label}
-                    {importProvider === entry.id ? " ▲" : " ▼"}
-                  </button>
-                  {importProvider === entry.id && (
-                    <>
-                      <Select
-                        value={importModel}
-                        options={
-                          entry.models.length > 0
-                            ? entry.models.map((option) => ({
-                                value: option.id,
-                                label:
-                                  option.format === "other"
-                                    ? `${option.name}（格式不支持）`
-                                    : option.format === "anthropic"
-                                      ? `${option.name}（Anthropic）`
-                                      : option.name,
-                              }))
-                            : [{ value: entry.model, label: entry.model }]
-                        }
-                        onChange={setImportModel}
-                      />
-                      <button
-                        type="button"
-                        className="primary"
-                        disabled={entry.models.some((option) => option.id === importModel && option.format === "other")}
-                        onClick={() => void importFromOpencode(entry.id, importModel)}
-                      >
-                        导入
-                      </button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="row">
+          <div className="row chat-settings-actions">
+            <button type="button" onClick={() => void testConnection()} disabled={testing}>
+              {testing ? "测试中…" : "测试连接"}
+            </button>
             <button type="button" className="primary" onClick={() => void saveSettings()}>
               保存
             </button>
@@ -702,9 +770,8 @@ export function ChatView() {
             )}
             <span className="muted">Key 只存在本地，不会下发到页面。</span>
           </div>
-          {config && <p className="muted">配置文件：{config.configPath}</p>}
         </div>
-      )}
+      </Modal>
 
       <div className="chat-body" ref={bodyRef} onScroll={onScroll}>
         {messages.length === 0 && (
@@ -763,6 +830,7 @@ export function ChatView() {
                         重新生成
                       </button>
                     )}
+                    {typeof message.ms === "number" && <span className="msg-time">{formatMs(message.ms)}</span>}
                   </>
                 )}
                 {message.role === "user" && !streaming && (
@@ -782,6 +850,23 @@ export function ChatView() {
           <IconArrowDown /> 到底部
         </button>
       )}
+
+      <div
+        className={`context-meter level-${contextLevel}`}
+        title={`估算约 ${usedTokens.toLocaleString()} / ${contextLimit.toLocaleString()} tokens（含系统提示与工作区上下文，粗略估算）`}
+      >
+        <span className="context-text">
+          上下文 ≈{formatTokens(usedTokens)} / {formatTokens(contextLimit)}
+        </span>
+        <span className="context-track">
+          <i style={{ width: `${Math.max(2, contextRatio * 100)}%` }} />
+        </span>
+        {contextLevel === "high" && (
+          <button type="button" className="context-reset" onClick={() => void newSession()}>
+            新建会话
+          </button>
+        )}
+      </div>
 
       <div className="chat-input">
         <textarea
@@ -806,55 +891,40 @@ export function ChatView() {
         )}
       </div>
 
-      {renameOpen && (
-        <div className="palette-overlay" onClick={() => setRenameOpen(false)}>
-          <div className="palette dialog" onClick={(event) => event.stopPropagation()}>
-            <div className="palette-input">
-              <strong>重命名会话</strong>
-            </div>
-            <div className="dialog-body">
-              <input
-                autoFocus
-                value={renameValue}
-                onChange={(event) => setRenameValue(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void submitRename();
-                  if (event.key === "Escape") setRenameOpen(false);
-                }}
-              />
-              <div className="row">
-                <button type="button" className="primary" onClick={() => void submitRename()}>
-                  确定
-                </button>
-                <button type="button" onClick={() => setRenameOpen(false)}>
-                  取消
-                </button>
-              </div>
-            </div>
+      <Modal open={renameOpen} className="dialog" title="重命名会话" onClose={() => setRenameOpen(false)}>
+        <div className="dialog-body">
+          <input
+            autoFocus
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void submitRename();
+            }}
+          />
+          <div className="row">
+            <button type="button" className="primary" onClick={() => void submitRename()}>
+              确定
+            </button>
+            <button type="button" onClick={() => setRenameOpen(false)}>
+              取消
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {confirmDelete && (
-        <div className="palette-overlay" onClick={() => setConfirmDelete(false)}>
-          <div className="palette dialog" onClick={(event) => event.stopPropagation()}>
-            <div className="palette-input">
-              <strong>删除会话</strong>
-            </div>
-            <div className="dialog-body">
-              <p className="muted">删除后不可撤销，确定要删除当前会话吗？</p>
-              <div className="row">
-                <button type="button" className="primary danger" onClick={() => void removeSession()}>
-                  删除
-                </button>
-                <button type="button" onClick={() => setConfirmDelete(false)}>
-                  取消
-                </button>
-              </div>
-            </div>
+      <Modal open={confirmDelete} className="dialog" title="删除会话" onClose={() => setConfirmDelete(false)}>
+        <div className="dialog-body">
+          <p className="muted">删除后不可撤销，确定要删除当前会话吗？</p>
+          <div className="row">
+            <button type="button" className="primary danger" onClick={() => void removeSession()}>
+              删除
+            </button>
+            <button type="button" onClick={() => setConfirmDelete(false)}>
+              取消
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

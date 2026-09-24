@@ -8,16 +8,21 @@ import {
   LIST_LIMIT,
   READ_LIMIT,
   SKIP_DIRS,
+  draftGoals as draftGoalsAgent,
   inferFormat,
   isBinary,
   loadAgentConfig,
   resolveInside,
   runAgent,
   saveAgentConfig,
+  streamCompletion,
+  streamCompletionAnthropic,
   toRelative,
+  validateGoalsDraft,
   type AgentConfig,
   type AgentConfigView,
   type AgentEvent,
+  type GoalsDraftResult,
 } from "@myblog/agent";
 import {
   Workspace,
@@ -33,6 +38,7 @@ import {
   type TodayPlan,
   type WorkspaceStatus,
 } from "@myblog/core";
+import { EMPTY_PLUGINS, loadPlugins, type LoadedPlugins, type PluginInfo } from "./plugins.js";
 import { createWorkspaceWatcher } from "./watcher.js";
 import {
   activateSession,
@@ -130,6 +136,16 @@ function workspaceAgentFile(root: string): string {
   return path.join(root, WORKSPACE_AGENT_FILE);
 }
 
+/** 本机推理（Ollama 等）不需要 API Key，可以视为已就绪 */
+function isLocalBase(baseURL: string): boolean {
+  try {
+    const host = new URL(baseURL).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
 function asProfile(raw: unknown): AgentProfile | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as Partial<AgentProfile>;
@@ -200,6 +216,8 @@ export interface AgentView extends AgentConfigView {
   profile: string;
   profiles: string[];
   workspaceFile: string;
+  /** 真的能用了：填了 baseURL/model，且（有 key 或本机地址） */
+  ready: boolean;
 }
 
 export interface ApiOptions {
@@ -209,6 +227,8 @@ export interface ApiOptions {
   workspaces?: string[];
   opencodeAuthPath?: string;
   opencodeModelsPath?: string;
+  /** 外部插件目录（每个子目录一个插件） */
+  pluginsDir?: string;
   onRootChange?: (root: string) => void;
 }
 
@@ -298,6 +318,14 @@ export interface MyBlogHandlers {
     format: string;
   }>;
   agent: () => Promise<AgentView>;
+  testAgent: (payload: {
+    baseURL?: string;
+    model?: string;
+    apiKey?: string;
+    format?: "openai" | "anthropic" | "auto";
+  }) => Promise<{ ok: true; message: string }>;
+  draftGoals: (payload: { text: string }) => Promise<GoalsDraftResult>;
+  saveGoals: (payload: { content: string }) => Promise<{ ok: true; path: string; capabilities: number }>;
   saveAgent: (payload: {
     baseURL?: string;
     model?: string;
@@ -320,6 +348,8 @@ export interface MyBlogHandlers {
   history: () => Promise<{ session: SessionMeta | null; messages: StoredMessage[] }>;
   saveHistory: (payload: { messages: StoredMessage[] }) => Promise<{ ok: true }>;
   clearHistory: () => Promise<{ ok: true }>;
+  plugins: () => Promise<{ plugins: PluginInfo[]; commands: { id: string; title: string; hint: string }[] }>;
+  runPluginCommand: (payload: { id: string }) => Promise<unknown>;
 }
 
 export type ApiMethod = keyof MyBlogHandlers;
@@ -345,6 +375,10 @@ export function createApi(options: ApiOptions): MyBlogApi {
     ];
   }
   const storageFile = path.join(path.dirname(defaults.agentConfigPath), "settings.json");
+
+  const pluginsPromise: Promise<LoadedPlugins> = options.pluginsDir
+    ? loadPlugins(options.pluginsDir)
+    : Promise.resolve(EMPTY_PLUGINS);
 
   let storage: StorageSettings | null = null;
   let currentRoot = defaults.activeWorkspace;
@@ -396,19 +430,24 @@ export function createApi(options: ApiOptions): MyBlogApi {
     source: AgentView["source"],
     configPath: string,
     extras: { profile?: string; profiles?: string[]; workspaceFile?: string } = {},
-  ): AgentView => ({
-    configured: config.baseURL !== "" && config.model !== "",
-    baseURL: config.baseURL,
-    model: config.model,
-    hasApiKey: Boolean(config.apiKey),
-    configPath,
-    format: inferFormat(config),
-    maxTokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
-    source,
-    profile: extras.profile ?? "",
-    profiles: extras.profiles ?? [],
-    workspaceFile: extras.workspaceFile ?? "",
-  });
+  ): AgentView => {
+    const configured = config.baseURL !== "" && config.model !== "";
+    const hasApiKey = Boolean(config.apiKey);
+    return {
+      configured,
+      ready: configured && (hasApiKey || isLocalBase(config.baseURL)),
+      baseURL: config.baseURL,
+      model: config.model,
+      hasApiKey,
+      configPath,
+      format: inferFormat(config),
+      maxTokens: config.maxTokens ?? DEFAULT_MAX_TOKENS,
+      source,
+      profile: extras.profile ?? "",
+      profiles: extras.profiles ?? [],
+      workspaceFile: extras.workspaceFile ?? "",
+    };
+  };
 
   const toAgentConfig = (profile: AgentProfile): AgentConfig => {
     const config: AgentConfig = { baseURL: profile.baseURL, model: profile.model, apiKey: profile.apiKey ?? "" };
@@ -594,6 +633,7 @@ export function createApi(options: ApiOptions): MyBlogApi {
       if (typeof payload.content !== "string") throw new Error("缺少 content");
       const workspace = await get();
       await mkdir(workspace.dayDir(payload.date), { recursive: true });
+      await workspace.backup(workspace.summaryPath(payload.date));
       await writeFile(workspace.summaryPath(payload.date), payload.content, "utf8");
       return { ok: true, path: workspace.summaryPath(payload.date) };
     },
@@ -607,7 +647,10 @@ export function createApi(options: ApiOptions): MyBlogApi {
       const workspace = await get();
       const raw = await readFile(workspace.overviewPath, "utf8");
       const next = updateProgress(raw, patch);
-      if (next !== raw) await writeFile(workspace.overviewPath, next, "utf8");
+      if (next !== raw) {
+        await workspace.backup(workspace.overviewPath);
+        await writeFile(workspace.overviewPath, next, "utf8");
+      }
       return { ok: true, changed: next !== raw };
     },
 
@@ -836,6 +879,61 @@ export function createApi(options: ApiOptions): MyBlogApi {
 
     agent: async () => (await resolveAgent()).view,
 
+    testAgent: async (payload) => {
+      const saved = (await resolveAgent()).config;
+      const baseURL = (payload?.baseURL ?? saved.baseURL).trim();
+      const model = (payload?.model ?? saved.model).trim();
+      const apiKey = payload?.apiKey ? payload.apiKey : saved.apiKey;
+      if (baseURL === "" || model === "") throw new Error("先填 Base URL 和 Model");
+
+      const config: AgentConfig = { baseURL, model, apiKey };
+      if (payload?.format === "openai" || payload?.format === "anthropic") config.format = payload.format;
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      const stream = inferFormat(config) === "anthropic" ? streamCompletionAnthropic : streamCompletion;
+      try {
+        for await (const event of stream(config, [{ role: "user", content: "只回复：ok" }], [], controller.signal)) {
+          if (event.type === "text") return { ok: true as const, message: event.text.trim().slice(0, 80) || "连接成功" };
+        }
+        return { ok: true as const, message: "连接成功" };
+      } catch (caught) {
+        if ((caught as Error).name === "AbortError") throw new Error("连接超时（15 秒没响应）");
+        throw caught;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    draftGoals: async (payload) => {
+      const text = (payload?.text ?? "").trim();
+      if (text === "") throw new Error("先写点你想学的内容");
+      const { config } = await resolveAgent();
+      if (config.baseURL === "" || config.model === "") throw new Error("先在设置里配置模型");
+      if (!config.apiKey && !isLocalBase(config.baseURL)) throw new Error("先在设置里填 API Key");
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 60000);
+      try {
+        return await draftGoalsAgent(config, { text }, { signal: controller.signal });
+      } catch (caught) {
+        if ((caught as Error).name === "AbortError") throw new Error("生成超时（60 秒没响应）");
+        throw caught;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    saveGoals: async (payload) => {
+      if (typeof payload?.content !== "string" || payload.content.trim() === "") throw new Error("内容不能为空");
+      const validation = validateGoalsDraft(payload.content);
+      if (!validation.ok) throw new Error(`学习目标格式有问题：${validation.problems.join("；")}`);
+      const workspace = await get();
+      await workspace.backup(workspace.goalsPath);
+      await writeFile(workspace.goalsPath, payload.content, "utf8");
+      return { ok: true as const, path: workspace.config.goals, capabilities: validation.capabilities };
+    },
+
     saveAgent: async (payload) => {
       const storage = await getStorage();
       const workspace = await get();
@@ -1023,14 +1121,33 @@ export function createApi(options: ApiOptions): MyBlogApi {
       await writeActive(currentRoot, target.dir, [], target.label);
       return { ok: true };
     },
+
+    plugins: async () => {
+      const loaded = await pluginsPromise;
+      return {
+        plugins: loaded.plugins,
+        commands: loaded.commands.map((command) => ({ id: command.id, title: command.title, hint: command.hint })),
+      };
+    },
+
+    runPluginCommand: async (payload) => {
+      const loaded = await pluginsPromise;
+      const command = loaded.commands.find((entry) => entry.id === payload?.id);
+      if (!command) throw new Error(`未知插件命令：${payload?.id ?? ""}`);
+      return command.run({ root: currentRoot, pluginId: command.pluginId });
+    },
   };
 
   const dispatch = async (method: string, payload?: unknown): Promise<unknown> => {
     const handler = (handlers as unknown as Record<string, ((input: unknown) => Promise<unknown>) | undefined>)[
       method
     ];
-    if (typeof handler !== "function") throw new Error(`未知接口：${method}`);
-    return handler.call(handlers, payload);
+    if (typeof handler === "function") return handler.call(handlers, payload);
+
+    const loaded = await pluginsPromise;
+    const plugin = loaded.handlers[method];
+    if (plugin) return plugin.run(payload, { root: currentRoot, pluginId: plugin.pluginId });
+    throw new Error(`未知接口：${method}`);
   };
 
   const streamChat = async (
@@ -1047,7 +1164,13 @@ export function createApi(options: ApiOptions): MyBlogApi {
 
     const workspace = await get();
     const { config } = await resolveAgent();
-    for await (const event of runAgent({ workspace, messages, config, signal })) {
+    const loaded = await pluginsPromise;
+    const extraTools = loaded.tools.map((tool) => ({
+      spec: tool.spec,
+      run: (args: Record<string, unknown>) =>
+        Promise.resolve(tool.run(args, { root: currentRoot, pluginId: tool.pluginId })),
+    }));
+    for await (const event of runAgent({ workspace, messages, config, signal, extraTools })) {
       if (signal.aborted) break;
       emit(event);
     }

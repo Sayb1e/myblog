@@ -1,4 +1,4 @@
-import { buildContext, type Workspace } from "@myblog/core";
+import { buildContext, type ContextBundle, type Workspace } from "@myblog/core";
 import { inferFormat, loadAgentConfig, type AgentConfig } from "./config.js";
 import {
   streamCompletion,
@@ -9,7 +9,7 @@ import {
 } from "./provider.js";
 import { executeTool, toolSpecs } from "./tools.js";
 
-const SYSTEM_PROMPT = `你是 MyBlog 的学习助手，管理一个基于 markdown 的学习工作区（学习进度总览 / 岗位目标 / 每日总结）。
+const SYSTEM_PROMPT = `你是 MyBlog 的学习助手，管理一个基于 markdown 的学习工作区（学习进度总览 / 学习目标 / 每日总结）。
 
 规则：
 1. 用中文回答，简洁、可执行。
@@ -17,15 +17,44 @@ const SYSTEM_PROMPT = `你是 MyBlog 的学习助手，管理一个基于 markdo
    - 闲聊、提问、问概念、让你解释代码、让你给建议 → **不调用工具**，直接回答。
    - 只有当用户明确要求「读某个文件 / 写或改某个文件 / 记录今天进度 / 生成总结 / 校验工作区」时，才调用对应工具。
    - 不要每次回复都追加「需要我写入吗」「要我保存吗」这类问句；只有当你**确实准备落盘**、需要用户点一次确认时才问。
-3. 规划当天任务时，把「下次从哪继续」与当前阶段 G 能力取交集，给出 1-3 条具体动作，每条附验证方式；不要提前开后面的阶段。
-4. 当前工作区上下文已直接给你（系统消息里的 JSON）。除非确需某天历史总结（myblog_read_summary）、用户明确要求校验（myblog_check），否则不要重复调用 myblog_context / myblog_check。
+3. 规划当天任务时，把「下次从哪继续」与当前阶段 G 能力取交集，**最多 3 条**动作，**每条一行**、各附一句验证方式；整体控制在几行内。不要复述背景/能力清单，不要罗列无关内容，不要提前开后面的阶段。
+4. 当前工作区上下文已直接给你（系统消息里的 JSON，只含活跃能力与最近记录）。除非确需完整能力清单 / 历史总结（myblog_context / myblog_read_summary）、或用户明确要求校验（myblog_check），否则不要重复调用。
 5. 写操作要先征得用户同意：用 myblog_close（默认 dryRun=true）或 myblog_scaffold，把 diff / 结果给用户看；用户明确同意后才用 dryRun:false 落盘。
 6. 读写工作区里的普通文件（脚本、代码、笔记等）用 fs_list / fs_read / fs_write，路径一律用相对工作区根目录的相对路径。同样先以 fs_write（默认 dryRun=true）出 diff，用户同意后才传 dryRun:false；不要声称自己没有写文件权限。用户只是让你给出文件内容时，把内容写在回复里即可，不要调用 fs_write。
-7. 只改动与今天相关的内容，外科手术式写回，不要整篇重写。`;
+7. 只改动与今天相关的内容，外科手术式写回，不要整篇重写。
+8. **有进展才生成**：当天没有实际进展（没做、没学、没得到结论）时，不要创建日期目录/当天总结、不要调用 myblog_scaffold / myblog_close、也不要改 PROGRESS.md；只聊天就好。只有确有进展（做了、学了、「下次从哪继续」有变化）才创建当天总结并写回。`;
+
+/** 只把 agent 规划需要的字段喂给模型：活跃能力 + 最近记录，避免整包上下文导致输出啰嗦 */
+export function summarizeContext(context: ContextBundle): Record<string, unknown> {
+  return {
+    root: context.root,
+    initialized: context.initialized,
+    stage: context.stage,
+    stageIds: context.stageIds,
+    active: context.active,
+    next: context.next,
+    lastDate: context.lastDate,
+    lastNext: context.lastNext,
+    lastSkills: context.lastSkills,
+    progress: context.progress,
+    directions: context.directions,
+    capabilityCount: context.capabilities.length,
+    recentRecords: context.records.slice(0, 5),
+    missing: context.missing,
+  };
+}
+
+/** 规划类回答默认用较低温度，更聚焦、少发散 */
+const DEFAULT_TEMPERATURE = 0.3;
 
 export interface AgentMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+export interface AgentExtraTool {
+  spec: ToolSpec;
+  run: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
 export interface AgentRunOptions {
@@ -36,6 +65,8 @@ export interface AgentRunOptions {
   configPath?: string;
   signal?: AbortSignal;
   maxSteps?: number;
+  /** 插件等外部追加的工具，与内置工具一起暴露给模型 */
+  extraTools?: AgentExtraTool[];
 }
 
 export type AgentEvent =
@@ -55,19 +86,26 @@ export async function* runAgent(options: AgentRunOptions): AsyncGenerator<AgentE
 
   const context = await buildContext(options.workspace);
   const history: ChatMessage[] = [
-    { role: "system", content: `${SYSTEM_PROMPT}\n\n当前工作区上下文（JSON）：\n${JSON.stringify(context, null, 2)}` },
+    {
+      role: "system",
+      content: `${SYSTEM_PROMPT}\n\n当前工作区上下文（JSON）：\n${JSON.stringify(summarizeContext(context), null, 2)}`,
+    },
     ...options.messages.map((message) => ({ role: message.role, content: message.content })),
   ];
 
-  const tools: ToolSpec[] = toolSpecs();
+  const extraTools = options.extraTools ?? [];
+  const tools: ToolSpec[] = [...toolSpecs(), ...extraTools.map((tool) => tool.spec)];
+  const extraRuns = new Map(extraTools.map((tool) => [tool.spec.function.name, tool.run]));
   const maxSteps = options.maxSteps ?? 6;
 
-  const stream = inferFormat(config) === "anthropic" ? streamCompletionAnthropic : streamCompletion;
+  const streamConfig: AgentConfig =
+    config.temperature === undefined ? { ...config, temperature: DEFAULT_TEMPERATURE } : config;
+  const stream = inferFormat(streamConfig) === "anthropic" ? streamCompletionAnthropic : streamCompletion;
 
   try {
     for (let step = 0; step < maxSteps; step += 1) {
       let assistant: AssistantMessage | null = null;
-      for await (const event of stream(config, history, tools, options.signal)) {
+      for await (const event of stream(streamConfig, history, tools, options.signal)) {
         if (event.type === "text") yield { type: "text", text: event.text };
         else assistant = event.message;
       }
@@ -81,7 +119,10 @@ export async function* runAgent(options: AgentRunOptions): AsyncGenerator<AgentE
         let result: unknown;
         try {
           const parsed = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>;
-          result = await executeTool(options.workspace, call.function.name, parsed);
+          const pluginRun = extraRuns.get(call.function.name);
+          result = pluginRun
+            ? await pluginRun(parsed)
+            : await executeTool(options.workspace, call.function.name, parsed);
         } catch (error) {
           result = { error: error instanceof Error ? error.message : String(error) };
         }

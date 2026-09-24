@@ -8,6 +8,10 @@ export interface TerminalOptions {
 
 contextBridge.exposeInMainWorld("myblog", {
   desktop: true,
+  state: () => ipcRenderer.invoke("myblog:state") as Promise<{ ready: boolean; root: string }>,
+  setupWorkspace: (path: string) => ipcRenderer.invoke("myblog:setup", path) as Promise<{ root: string }>,
+  createSampleWorkspace: (parent: string) =>
+    ipcRenderer.invoke("myblog:setup-sample", parent) as Promise<{ root: string }>,
   pickDirectory: () => ipcRenderer.invoke("dialog:pick-directory") as Promise<string | null>,
   absolutePath: (relative: string) => ipcRenderer.invoke("shell:absolute", relative) as Promise<string>,
   reveal: (relative: string) => ipcRenderer.send("shell:reveal", relative),

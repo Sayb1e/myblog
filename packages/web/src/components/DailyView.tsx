@@ -13,7 +13,7 @@ interface Props {
   onRefresh: () => Promise<void>;
 }
 
-const SUMMARY_FILE = "总结.md";
+const SUMMARY_FILE = "SUMMARY.md";
 const DATE_PAGE = 120;
 
 export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
@@ -29,6 +29,7 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
   const [closePreview, setClosePreview] = useState("");
   const [mode, setMode] = useState<"edit" | "split" | "preview">("edit");
   const [dateLimit, setDateLimit] = useState(DATE_PAGE);
+  const [savedAt, setSavedAt] = useState("");
 
   const [editor, setEditor] = useState<HTMLTextAreaElement | null>(null);
   const [preview, setPreview] = useState<HTMLDivElement | null>(null);
@@ -91,6 +92,41 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
     }
   };
 
+  const stamp = (): string => new Date().toLocaleTimeString().slice(0, 5);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          await saveSummary(date, content);
+          setDirty(false);
+          setSavedAt(stamp());
+          await onRefresh();
+        } catch {
+          // 自动保存失败：保持未保存状态，用户仍可手动保存
+        }
+      })();
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [content, date, dirty, onRefresh]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (event: BeforeUnloadEvent): void => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [dirty]);
+
+  const chooseDate = (target: string): void => {
+    if (target === date) return;
+    if (dirty) void saveSummary(date, content).catch(() => undefined);
+    onSelectDate(target);
+  };
+
   const create = async (): Promise<void> => {
     try {
       const result = await scaffoldDay(date);
@@ -142,7 +178,7 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
       <aside className="date-side">
         <div className="date-list-head">
           <h2>日期</h2>
-          <DatePicker value={date} onChange={onSelectDate} />
+          <DatePicker value={date} onChange={chooseDate} />
         </div>
         <div className="date-list">
         {dateGroups.map((group) => (
@@ -154,7 +190,7 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
                 type="button"
                 className={`date-item reveal${summary.date === date ? " active" : ""}`}
                 style={revealStyle(index)}
-                onClick={() => onSelectDate(summary.date)}
+                onClick={() => chooseDate(summary.date)}
               >
                 <span className="date-num">{summary.date.slice(5)}</span>
                 {summary.skills.length > 0 && <span className="date-skills">{summary.skills.join(" ")}</span>}
@@ -179,6 +215,7 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
             {current && current.skills.length > 0 && <span className="chip">{current.skills.join(" ")}</span>}
             {!exists && date && <span className="chip">尚无总结</span>}
             {dirty && <span className="chip warn">未保存</span>}
+            {!dirty && savedAt && <span className="muted">已保存 {savedAt}</span>}
           </div>
         </div>
 

@@ -96,7 +96,6 @@ export function Sidebar({
             options={workspaceOptions}
             onChange={onSwitchWorkspace}
             placeholder="工作区"
-            title={root}
             placement="up"
             icon={<IconWrench />}
             actions={[

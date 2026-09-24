@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseSummary, scaffoldSummary } from "../src/daily.js";
 import { readFixture } from "./helpers.js";
 
-const raw = readFixture("2026-09-17/总结.md");
+const raw = readFixture("2026-09-17/SUMMARY.md");
 
 describe("parseSummary", () => {
   it("extracts date, preview, capability ids and next", () => {

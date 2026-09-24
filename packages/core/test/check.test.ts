@@ -38,10 +38,10 @@ describe("Workspace.check", () => {
         "3. **G99 动态 Hook**：Frida Hook / 主动调用",
       )
       .replace(
-        "| 2026-09-13 | 对齐转岗背景和方向。 | [总结](./2026-09-13/总结.md) |",
-        "| 2026-09-12 | 坏链 | [总结](./2026-09-12/总结.md) |",
+        "| 2026-09-13 | 对齐转岗背景和方向。 | [总结](./2026-09-13/SUMMARY.md) |",
+        "| 2026-09-12 | 坏链 | [总结](./2026-09-12/SUMMARY.md) |",
       )
-      .replace("最近一次：[2026-09-17](./2026-09-17/总结.md)", "最近一次：[2026-09-17](./2026-09-99/总结.md)");
+      .replace("最近一次：[2026-09-17](./2026-09-17/SUMMARY.md)", "最近一次：[2026-09-17](./2026-09-99/SUMMARY.md)");
     await writeFile(workspace.overviewPath, mutated, "utf8");
 
     const result = await workspace.check();

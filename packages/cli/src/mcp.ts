@@ -46,7 +46,7 @@ export function createMcpServer(workspace: Workspace): McpServer {
     "myblog_read_summary",
     {
       title: "Read a daily summary",
-      description: "读取某一天的 YYYY-MM-DD/总结.md（解析后的字段与原始 markdown）。",
+      description: "读取某一天的 YYYY-MM-DD/SUMMARY.md（解析后的字段与原始 markdown）。",
       inputSchema: { date: z.string().describe("日期，格式 YYYY-MM-DD") },
     },
     async ({ date }) => {
@@ -64,7 +64,7 @@ export function createMcpServer(workspace: Workspace): McpServer {
     {
       title: "Scaffold a daily summary",
       description:
-        "为某天创建 总结.md 骨架（已存在则不会覆盖）。用户批准后再调用；随后可用编辑工具在「## 这次」里补充内容。",
+        "为某天创建 SUMMARY.md 骨架（已存在则不会覆盖）。只在当天确有进展时调用，用户批准后再调用；随后可用编辑工具在「## 这次」里补充内容。",
       inputSchema: {
         date: z.string().describe("日期，格式 YYYY-MM-DD"),
         preview: z.string().optional().describe("填入「前情提要」"),
@@ -90,7 +90,7 @@ export function createMcpServer(workspace: Workspace): McpServer {
         learned: z.string().optional().describe("「学到哪了」"),
         next: z.string().optional().describe("「下次从哪继续」"),
         didWhat: z.string().optional().describe("学习记录里「这次做了什么」，填了才加记录"),
-        link: z.string().optional().describe("学习记录链接，默认 ./<date>/总结.md"),
+        link: z.string().optional().describe("学习记录链接，默认 ./<date>/SUMMARY.md"),
         linkText: z.string().optional().describe("链接文字，默认「总结」"),
         dryRun: z.boolean().optional().describe("默认 true；确认后传 false 才落盘"),
       },

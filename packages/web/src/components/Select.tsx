@@ -62,7 +62,7 @@ export function Select({
     <div
       className={`select${open ? " open" : ""}${placement === "up" ? " up" : ""}${className ? ` ${className}` : ""}`}
       ref={rootRef}
-      title={title}
+      data-tip={title}
     >
       <button type="button" className="select-trigger" onClick={() => setOpen((current) => !current)}>
         {icon && <span className="select-icon">{icon}</span>}

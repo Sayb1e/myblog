@@ -9,11 +9,11 @@ describe("parseOverview", () => {
     const doc = parseOverview(raw);
     expect(doc.progress.learned).toContain("环境全通");
     expect(doc.progress.next).toBe("写脚本 Hook Demo（G3）。");
-    expect(doc.progress.latest).toBe("[2026-09-17](./2026-09-17/总结.md)");
+    expect(doc.progress.latest).toBe("[2026-09-17](./2026-09-17/SUMMARY.md)");
     expect(doc.records).toHaveLength(2);
     expect(doc.records[0]).toMatchObject({
       date: "2026-09-17",
-      link: "./2026-09-17/总结.md",
+      link: "./2026-09-17/SUMMARY.md",
       linkText: "总结",
     });
     expect(doc.records[0]?.didWhat).toContain("G2 闭环");
@@ -40,11 +40,11 @@ describe("updateProgress", () => {
 
 describe("addRecord", () => {
   it("is a pure single-line insertion", () => {
-    const row = "| 2026-09-18 | Frida Hook 闭环 | [总结](./2026-09-18/总结.md) |";
+    const row = "| 2026-09-18 | Frida Hook 闭环 | [总结](./2026-09-18/SUMMARY.md) |";
     const updated = addRecord(raw, {
       date: "2026-09-18",
       didWhat: "Frida Hook 闭环",
-      link: "./2026-09-18/总结.md",
+      link: "./2026-09-18/SUMMARY.md",
       linkText: "总结",
     });
     expect(updated.replace(`${row}\n`, "")).toBe(raw);

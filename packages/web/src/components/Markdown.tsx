@@ -25,9 +25,11 @@ function balanceFences(text: string): string {
 interface Props {
   children: string;
   inline?: boolean;
+  /** 返回 true 表示已自行处理该链接（如在工作区内跳转），阻止默认打开 */
+  onNavigate?: (href: string) => boolean;
 }
 
-export function Markdown({ children, inline }: Props) {
+export function Markdown({ children, inline, onNavigate }: Props) {
   const { openDate } = useContext(MarkdownContext);
   const { prefs } = usePrefs();
 
@@ -57,6 +59,19 @@ export function Markdown({ children, inline }: Props) {
           >
             {label}
           </button>
+        );
+      }
+      if (onNavigate) {
+        return (
+          <a
+            href={href}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (onNavigate(href ?? "")) event.preventDefault();
+            }}
+          >
+            {label}
+          </a>
         );
       }
       return (
