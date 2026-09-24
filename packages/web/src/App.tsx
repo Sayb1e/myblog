@@ -82,6 +82,13 @@ export function App() {
   const [modelReady, setModelReady] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [pluginCommands, setPluginCommands] = useState<{ id: string; title: string; hint: string }[]>([]);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalMounted, setTerminalMounted] = useState(false);
+
+  const toggleTerminal = (): void => {
+    if (!terminalOpen) setTerminalMounted(true);
+    setTerminalOpen(!terminalOpen);
+  };
   const [chatted, setChatted] = useState(() => localStorage.getItem("myblog:onboard:chatted") === "1");
   const [onboardDismissed, setOnboardDismissed] = useState(
     () => localStorage.getItem("myblog:onboard:dismissed") === "1",
@@ -271,7 +278,9 @@ export function App() {
     ];
     list.push({ id: "view:files", label: "打开：文件", run: () => setView("files") });
     if (prefs.chatEnabled) list.push({ id: "view:chat", label: "打开：对话", run: () => setView("chat") });
-    if (prefs.terminalEnabled) list.push({ id: "view:terminal", label: "打开：终端", run: () => setView("terminal") });
+    if (prefs.terminalEnabled) {
+      list.push({ id: "action:terminal", label: terminalOpen ? "收起终端" : "打开终端", run: toggleTerminal });
+    }
     list.push({ id: "view:check", label: "打开：校验", run: () => setView("check") });
     list.push({ id: "view:settings", label: "打开：设置", run: () => setView("settings") });
     list.push({ id: "action:refresh", label: "刷新工作区", run: () => void refresh() });
@@ -329,7 +338,7 @@ export function App() {
       });
     }
     return list;
-  }, [openDate, prefs, pluginCommands, refresh, setPref, summaries, toast, workspaces, status?.root]);
+  }, [openDate, prefs, pluginCommands, refresh, setPref, summaries, toast, terminalOpen, workspaces, status?.root]);
 
   const saveProgress = useCallback(
     async (patch: Partial<ProgressSnapshot>) => {
@@ -383,6 +392,9 @@ export function App() {
         onSwitchWorkspace={(target) => void changeWorkspace(target)}
         onAddWorkspace={() => void addWorkspaceFolder()}
         onManageWorkspaces={() => setManageOpen(true)}
+        terminalEnabled={prefs.terminalEnabled}
+        terminalOpen={terminalOpen}
+        onToggleTerminal={toggleTerminal}
       />
 
       <main className="main">
@@ -513,14 +525,6 @@ export function App() {
           </div>
         )}
 
-        {visited.terminal && prefs.terminalEnabled && (
-          <div className={viewClass("terminal")}>
-            <Suspense fallback={<p className="muted">加载终端…</p>}>
-              <TerminalView cwd={status?.root ?? ""} active={view === "terminal"} />
-            </Suspense>
-          </div>
-        )}
-
         {visited.check && <div className={viewClass("check")}>{check && <CheckView result={check} />}</div>}
 
         {visited.settings && (
@@ -529,6 +533,26 @@ export function App() {
           </div>
         )}
         </div>
+
+        {prefs.terminalEnabled && terminalMounted && (
+          <section className={`terminal-dock${terminalOpen ? "" : " closed"}`}>
+            <div className="terminal-dock-head">
+              <span className="terminal-dock-title">终端</span>
+              <button
+                type="button"
+                className="ghost btn-sm"
+                onClick={() => setTerminalOpen(false)}
+              >
+                收起
+              </button>
+            </div>
+            <div className="terminal-dock-body">
+              <Suspense fallback={<p className="muted">加载终端…</p>}>
+                <TerminalView cwd={status?.root ?? ""} active={terminalOpen} />
+              </Suspense>
+            </div>
+          </section>
+        )}
       </main>
 
       {manageOpen && (

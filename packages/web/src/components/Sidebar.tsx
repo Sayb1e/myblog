@@ -27,6 +27,9 @@ interface Props {
   onSwitchWorkspace: (path: string) => void;
   onAddWorkspace: () => void;
   onManageWorkspaces: () => void;
+  terminalEnabled: boolean;
+  terminalOpen: boolean;
+  onToggleTerminal: () => void;
 }
 
 interface Item {
@@ -46,6 +49,9 @@ export function Sidebar({
   onSwitchWorkspace,
   onAddWorkspace,
   onManageWorkspaces,
+  terminalEnabled,
+  terminalOpen,
+  onToggleTerminal,
 }: Props) {
   const { prefs, setPref } = usePrefs();
   const hasTerminal = typeof window !== "undefined" && Boolean(window.myblog?.terminal);
@@ -57,7 +63,6 @@ export function Sidebar({
     { key: "files", label: "文件", icon: <IconFolderOpen /> },
   ];
   if (prefs.chatEnabled) items.push({ key: "chat", label: "对话", icon: <IconChat /> });
-  if (hasTerminal && prefs.terminalEnabled) items.push({ key: "terminal", label: "终端", icon: <IconTerminal /> });
   items.push({ key: "check", label: "校验", icon: <IconCheck /> });
 
   return (
@@ -104,6 +109,19 @@ export function Sidebar({
             ]}
           />
         </div>
+        {hasTerminal && terminalEnabled && (
+          <button
+            type="button"
+            className={`nav-item${terminalOpen ? " active" : ""}`}
+            onClick={onToggleTerminal}
+            title="终端"
+          >
+            <span className="nav-icon">
+              <IconTerminal />
+            </span>
+            <span className="nav-label">终端</span>
+          </button>
+        )}
         <button
           type="button"
           className={`nav-item${view === "settings" ? " active" : ""}`}

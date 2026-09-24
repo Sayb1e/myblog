@@ -2706,6 +2706,55 @@ details.settings-group[open] > summary::before {
   height: 100%;
 }
 
+/* ---------- terminal dock (bottom) ---------- */
+
+.terminal-dock {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  height: 38vh;
+  min-height: 160px;
+  max-height: 70vh;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.terminal-dock.closed {
+  display: none;
+}
+
+.terminal-dock-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--panel-2);
+}
+
+.terminal-dock-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.terminal-dock-head button {
+  margin-left: auto;
+}
+
+.terminal-dock-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px 10px;
+}
+
+.terminal-dock .terminal-wrap {
+  height: 100%;
+}
+
 /* ---------- toasts ---------- */
 
 .toasts {
@@ -4601,8 +4650,7 @@ button.primary.danger {
     max-height: 240px;
   }
 
-  .chat,
-  .terminal-wrap {
+  .chat {
     height: auto;
     min-height: 70vh;
   }
