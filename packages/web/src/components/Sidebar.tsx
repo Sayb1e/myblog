@@ -86,7 +86,7 @@ export function Sidebar({
             type="button"
             className={`nav-item${view === item.key ? " active" : ""}`}
             onClick={() => onView(item.key)}
-            data-tip={item.label}
+            data-tip={prefs.sidebarCollapsed ? item.label : undefined}
           >
             <span className="nav-icon">{item.icon}</span>
             <span className="nav-label">{item.label}</span>
@@ -116,7 +116,7 @@ export function Sidebar({
             type="button"
             className={`nav-item${terminalOpen ? " active" : ""}`}
             onClick={onToggleTerminal}
-            data-tip="终端"
+            data-tip={prefs.sidebarCollapsed ? "终端" : undefined}
           >
             <span className="nav-icon">
               <IconTerminal />
@@ -128,7 +128,7 @@ export function Sidebar({
           type="button"
           className={`nav-item${view === "settings" ? " active" : ""}`}
           onClick={() => onView("settings")}
-          data-tip="设置"
+          data-tip={prefs.sidebarCollapsed ? "设置" : undefined}
         >
           <span className="nav-icon">
             <IconSettings />
@@ -139,7 +139,7 @@ export function Sidebar({
           type="button"
           className="nav-item collapse-toggle"
           onClick={() => setPref("sidebarCollapsed", !prefs.sidebarCollapsed)}
-          data-tip={prefs.sidebarCollapsed ? "展开侧栏" : "收起侧栏"}
+          data-tip={prefs.sidebarCollapsed ? "展开侧栏" : undefined}
         >
           <span className="nav-icon" style={{ transform: prefs.sidebarCollapsed ? "rotate(180deg)" : undefined }}>
             <IconChevron />
