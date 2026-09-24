@@ -22,7 +22,6 @@ import {
   type GitState,
   type WorkspaceList,
 } from "./api.js";
-import { ActivityHeatmap } from "./components/ActivityHeatmap.js";
 import { CapabilityMap } from "./components/CapabilityMap.js";
 import { ChatView } from "./components/ChatView.js";
 import { CheckView } from "./components/CheckView.js";
@@ -35,6 +34,7 @@ import { GoalsGenerator } from "./components/GoalsGenerator.js";
 import { IconPencil, IconTrash } from "./components/icons.js";
 import { MarkdownProvider } from "./components/Markdown.js";
 import { Milestones } from "./components/Milestones.js";
+import { MilestonesView } from "./components/MilestonesView.js";
 import { Onboarding } from "./components/Onboarding.js";
 import { ProgressCard } from "./components/ProgressCard.js";
 import { SettingsView } from "./components/SettingsView.js";
@@ -58,6 +58,7 @@ const TerminalView = lazy(() =>
 
 const TITLES: Record<View, string> = {
   overview: "概览",
+  milestones: "里程碑",
   daily: "每日总结",
   files: "文件",
   chat: "对话",
@@ -315,6 +316,7 @@ export function App() {
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [
       { id: "view:overview", label: "打开：概览", run: () => setView("overview") },
+      { id: "view:milestones", label: "打开：里程碑", run: () => setView("milestones") },
       { id: "view:daily", label: "打开：每日总结", run: () => setView("daily") },
     ];
     list.push({ id: "view:files", label: "打开：文件", run: () => setView("files") });
@@ -535,7 +537,6 @@ export function App() {
                       onOpen={openDate}
                     />
                   )}
-                  {status && <ActivityHeatmap activity={activity} />}
                   {status && (
                     <Milestones
                       summaryCount={summaries.length}
@@ -550,6 +551,20 @@ export function App() {
             </div>
           </MarkdownProvider>
         </div>
+
+        {visited.milestones && (
+          <div className={viewClass("milestones")}>
+            {status && (
+              <MilestonesView
+                activity={activity}
+                summaryCount={summaries.length}
+                currentStreak={currentStreak}
+                capabilities={status.capabilities}
+                chatted={chatted}
+              />
+            )}
+          </div>
+        )}
 
         {visited.daily && (
           <div className={viewClass("daily")}>

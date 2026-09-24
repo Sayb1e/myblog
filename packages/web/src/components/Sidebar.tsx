@@ -12,6 +12,7 @@ import {
   IconSettings,
   IconSliders,
   IconTerminal,
+  IconTrophy,
   IconWrench,
 } from "./icons.js";
 import { Select, type SelectOption } from "./Select.js";
@@ -59,6 +60,7 @@ export function Sidebar({
 
   const items: Item[] = [
     { key: "overview", label: "概览", icon: <IconOverview /> },
+    { key: "milestones", label: "里程碑", icon: <IconTrophy /> },
     { key: "daily", label: "每日总结", icon: <IconDaily /> },
     { key: "files", label: "文件", icon: <IconFolderOpen /> },
   ];

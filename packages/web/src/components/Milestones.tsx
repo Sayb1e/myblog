@@ -38,7 +38,7 @@ export function Milestones({ summaryCount, currentStreak, capabilities, chatted 
   return (
     <section className="card milestones-card">
       <div className="card-head">
-        <h2>里程碑</h2>
+        <h2>成就</h2>
         <span className="muted">{done}/{items.length}</span>
       </div>
       <ul className="milestone-list">
