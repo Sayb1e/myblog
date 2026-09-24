@@ -50,7 +50,8 @@ import { WorkspaceFilesHelp } from "./components/WorkspaceFilesHelp.js";
 import { useToast } from "./hooks/useToasts.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { usePrefs } from "./prefs.js";
-import { computeAchievements } from "./achievements.js";
+import { computeAchievements, rememberAchievementTimes } from "./achievements.js";
+import { readEvents, setEvent, type Events } from "./events.js";
 import type { View } from "./view.js";
 
 const TerminalView = lazy(() =>
@@ -86,11 +87,16 @@ export function App() {
   const [modelReady, setModelReady] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [pluginCommands, setPluginCommands] = useState<{ id: string; title: string; hint: string }[]>([]);
+  const [pluginCount, setPluginCount] = useState(0);
+  const [events, setEvents] = useState<Events>(() => readEvents());
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalMounted, setTerminalMounted] = useState(false);
 
   const toggleTerminal = (): void => {
-    if (!terminalOpen) setTerminalMounted(true);
+    if (!terminalOpen) {
+      setTerminalMounted(true);
+      setEvent("terminal", true);
+    }
     setTerminalOpen(!terminalOpen);
   };
 
@@ -164,20 +170,35 @@ export function App() {
     return streak;
   }, [activity]);
 
+  const maxCapabilityDays = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ids of skillsByDate.values()) {
+      for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    let max = 0;
+    for (const value of counts.values()) if (value > max) max = value;
+    return max;
+  }, [skillsByDate]);
+
   const achievements = useMemo(
     () =>
       computeAchievements({
         summaryCount: summaries.length,
         currentStreak,
+        activityDays: activity.size,
         capabilities: status?.capabilities ?? [],
+        maxCapabilityDays,
         chatted,
+        pluginCount,
+        events,
       }),
-    [summaries.length, currentStreak, status?.capabilities, chatted],
+    [summaries.length, currentStreak, activity, status?.capabilities, maxCapabilityDays, chatted, pluginCount, events],
   );
 
   useEffect(() => {
     if (!status) return;
     const doneIds = achievements.filter((item) => item.done).map((item) => item.id);
+    rememberAchievementTimes(doneIds);
     let stored: string[] | null = null;
     try {
       const raw = localStorage.getItem("myblog:achievements");
@@ -196,13 +217,32 @@ export function App() {
     const known = new Set(stored);
     const fresh = achievements.filter((item) => item.done && !known.has(item.id));
     if (fresh.length === 0) return;
-    for (const item of fresh) toast("success", `解锁成就：${item.label}`);
+    for (const item of fresh) toast("success", `解锁成就：${item.name}`);
     try {
       localStorage.setItem("myblog:achievements", JSON.stringify([...new Set([...known, ...doneIds])]));
     } catch {
       // localStorage unavailable
     }
   }, [achievements, status, toast]);
+
+  useEffect(() => {
+    const current = status?.stageIds[0] ?? "";
+    if (!current) return;
+    let prev = "";
+    try {
+      prev = localStorage.getItem("myblog:stage") ?? "";
+    } catch {
+      prev = "";
+    }
+    if (prev && prev !== current) setEvent("stageAdvanced", true);
+    if (prev !== current) {
+      try {
+        localStorage.setItem("myblog:stage", current);
+      } catch {
+        // localStorage unavailable
+      }
+    }
+  }, [status?.stageIds]);
 
   const openDate = useCallback((value: string) => {
     setDate(value);
@@ -246,8 +286,17 @@ export function App() {
 
   useEffect(() => {
     void getPlugins()
-      .then((view) => setPluginCommands(Array.isArray(view?.commands) ? view.commands : []))
+      .then((view) => {
+        setPluginCommands(Array.isArray(view?.commands) ? view.commands : []);
+        setPluginCount(Array.isArray(view?.plugins) ? view.plugins.length : 0);
+      })
       .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const onChange = (): void => setEvents(readEvents());
+    window.addEventListener("myblog:events-changed", onChange);
+    return () => window.removeEventListener("myblog:events-changed", onChange);
   }, []);
 
   useEffect(() => {
@@ -578,14 +627,7 @@ export function App() {
                       onOpen={openDate}
                     />
                   )}
-                  {status && (
-                    <Milestones
-                      summaryCount={summaries.length}
-                      currentStreak={currentStreak}
-                      capabilities={status.capabilities}
-                      chatted={chatted}
-                    />
-                  )}
+                  {status && <Milestones achievements={achievements} />}
                   <GitCard onCommitted={refresh} />
                 </div>
               )}
@@ -595,15 +637,7 @@ export function App() {
 
         {visited.milestones && (
           <div className={viewClass("milestones")}>
-            {status && (
-              <MilestonesView
-                activity={activity}
-                summaryCount={summaries.length}
-                currentStreak={currentStreak}
-                capabilities={status.capabilities}
-                chatted={chatted}
-              />
-            )}
+            {status && <MilestonesView activity={activity} achievements={achievements} />}
           </div>
         )}
 
@@ -783,6 +817,7 @@ export function App() {
           window.dispatchEvent(new Event("myblog:open-agent-settings"));
         }}
         onSaved={() => {
+          setEvent("goalsRewritten", true);
           void (async () => {
             if (!initialized) {
               try {

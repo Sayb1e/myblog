@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { commitGit, errorMessage, getGit, type GitState } from "../api.js";
+import { setEvent } from "../events.js";
 import { useToast } from "../hooks/useToasts.js";
 import { IconGit } from "./icons.js";
 
@@ -33,6 +34,7 @@ export function GitCard({ onCommitted }: Props) {
     setBusy(true);
     try {
       await commitGit(message.trim());
+      setEvent("gitCommit", true);
       toast("success", "已提交");
       setOpen(false);
       await load();

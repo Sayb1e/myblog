@@ -22,6 +22,7 @@ import {
   type SessionMeta,
 } from "../api.js";
 import { AGENT_PRESETS as PRESETS } from "../agentPresets.js";
+import { bumpEvent } from "../events.js";
 import { useToast } from "../hooks/useToasts.js";
 import { usePrefs } from "../prefs.js";
 import { IconArrowDown, IconPencil, IconPlus, IconSpark, IconTrash } from "./icons.js";
@@ -510,6 +511,7 @@ export function ChatView() {
         .map((line) => `> ${line}`)
         .join("\n");
       setInput((current) => `${current}${current ? "\n\n" : ""}> 摘自 ${date} 的总结：\n${body}\n\n`);
+      bumpEvent("quote");
     } catch (caught) {
       toast("error", errorMessage(caught));
     }
@@ -534,6 +536,7 @@ export function ChatView() {
       window.dispatchEvent(new Event("myblog:chatted"));
     }
 
+    bumpEvent("chats");
     const userMessage: Message = { id: nextId++, role: "user", content: text, tools: [] };
     const assistantId = nextId++;
     const history = [...messages, userMessage].map((message) => ({ role: message.role, content: message.content }));
