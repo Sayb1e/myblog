@@ -4934,9 +4934,49 @@ button.primary.danger {
   color: var(--faint);
 }
 
-.milestone.done .milestone-mark {
+.milestone.done .milestone-mark.tier-1 {
   background: rgba(var(--accent-rgb), 0.16);
   color: var(--accent);
+}
+
+.milestone.done .milestone-mark.tier-2 {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f0a52a;
+}
+
+.milestone.done .milestone-mark.tier-3 {
+  background: linear-gradient(135deg, #f5a623, #f97316);
+  color: #fff;
+}
+
+.ach-progress {
+  height: 6px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: var(--inset);
+  overflow: hidden;
+}
+
+.ach-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+
+.ach-group + .ach-group {
+  margin-top: 14px;
+}
+
+.ach-group-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.4px;
+  color: var(--faint);
 }
 
 .milestone-mark svg {

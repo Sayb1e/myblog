@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   activateSession,
   createSession,
@@ -66,6 +66,66 @@ function estimateTokens(text: string): number {
 function formatTokens(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
 }
+
+interface MessageRowProps {
+  message: Message;
+  streaming: boolean;
+  isLastAssistant: boolean;
+  onRegenerate: (id: number) => void;
+  onEdit: (message: Message) => void;
+}
+
+const MessageRow = memo(function MessageRow({ message, streaming, isLastAssistant, onRegenerate, onEdit }: MessageRowProps) {
+  const thinking = message.role === "assistant" && message.content === "" && message.tools.length === 0 && streaming;
+  return (
+    <div className={`msg ${message.role}`}>
+      <div className={`bubble ${message.role}`}>
+        {thinking && <Spinner label="思考中" />}
+        {message.content &&
+          (message.role === "user" ? (
+            <div className="user-text">{message.content}</div>
+          ) : (
+            <Markdown>{message.content}</Markdown>
+          ))}
+        {message.tools.length > 1 ? (
+          <details className="tool-group" open>
+            <summary>工具调用 {message.tools.length} 次</summary>
+            <div className="tool-list">
+              {message.tools.map((tool, index) => (
+                <ToolCardView key={index} tool={tool} />
+              ))}
+            </div>
+          </details>
+        ) : (
+          message.tools.length === 1 && (
+            <div className="tool-list">
+              <ToolCardView tool={message.tools[0] as ToolCard} />
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="msg-actions">
+        {message.role === "assistant" && message.content && (
+          <>
+            <CopyButton text={message.content} />
+            {isLastAssistant && !streaming && (
+              <button type="button" className="copy-btn" onClick={() => onRegenerate(message.id)}>
+                重新生成
+              </button>
+            )}
+            {typeof message.ms === "number" && <span className="msg-time">{formatMs(message.ms)}</span>}
+          </>
+        )}
+        {message.role === "user" && !streaming && (
+          <button type="button" className="copy-btn" onClick={() => onEdit(message)}>
+            编辑
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
 
 const TOOL_META: Record<string, { label: string; icon: string; write?: boolean }> = {
   myblog_context: { label: "读取工作区", icon: "◈" },
@@ -186,6 +246,10 @@ export function ChatView() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
+  const streamingRef = useRef(false);
+  streamingRef.current = streaming;
   const [atBottom, setAtBottom] = useState(true);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -440,7 +504,7 @@ export function ChatView() {
     }
   };
 
-  const runTurn = async (
+  const runTurn = useCallback(async (
     history: { role: "user" | "assistant"; content: string }[],
     assistantId: number,
   ): Promise<void> => {
@@ -449,14 +513,35 @@ export function ChatView() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // 文本按帧合并：避免每个 token 都触发一次全量 setState
+    let pendingText = "";
+    let raf = 0;
+    const flushText = (): void => {
+      if (raf !== 0) {
+        window.cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      if (pendingText === "") return;
+      const chunk = pendingText;
+      pendingText = "";
+      setMessages((current) =>
+        current.map((message) => (message.id === assistantId ? { ...message, content: message.content + chunk } : message)),
+      );
+    };
+
     try {
       await streamChat(
         history,
         (event: ChatEvent) => {
+          if (event.type === "text") {
+            pendingText += event.text;
+            if (raf === 0) raf = window.requestAnimationFrame(flushText);
+            return;
+          }
+          flushText();
           setMessages((current) =>
             current.map((message) => {
               if (message.id !== assistantId) return message;
-              if (event.type === "text") return { ...message, content: message.content + event.text };
               if (event.type === "tool_start") {
                 return {
                   ...message,
@@ -490,12 +575,13 @@ export function ChatView() {
     } catch (caught) {
       if ((caught as Error).name !== "AbortError") toast("error", errorMessage(caught));
     } finally {
+      flushText();
       const elapsed = performance.now() - started;
       setMessages((current) => current.map((message) => (message.id === assistantId ? { ...message, ms: elapsed } : message)));
       setStreaming(false);
       abortRef.current = null;
     }
-  };
+  }, []);
 
   const quoteSummary = async (date: string): Promise<void> => {
     if (!date) return;
@@ -550,22 +636,26 @@ export function ChatView() {
     await runTurn(history, assistantId);
   };
 
-  const regenerate = async (assistantId: number): Promise<void> => {
-    if (streaming) return;
-    const index = messages.findIndex((message) => message.id === assistantId);
-    if (index < 1) return;
-    const base = messages.slice(0, index);
-    const history = base.map((message) => ({ role: message.role, content: message.content }));
-    const newId = nextId++;
-    setMessages([...base, { id: newId, role: "assistant", content: "", tools: [] }]);
-    await runTurn(history, newId);
-  };
+  const regenerate = useCallback(
+    async (assistantId: number): Promise<void> => {
+      if (streamingRef.current) return;
+      const current = messagesRef.current;
+      const index = current.findIndex((message) => message.id === assistantId);
+      if (index < 1) return;
+      const base = current.slice(0, index);
+      const history = base.map((message) => ({ role: message.role, content: message.content }));
+      const newId = nextId++;
+      setMessages([...base, { id: newId, role: "assistant", content: "", tools: [] }]);
+      await runTurn(history, newId);
+    },
+    [runTurn],
+  );
 
-  const editUser = (message: Message): void => {
-    if (streaming) return;
+  const editUser = useCallback((message: Message): void => {
+    if (streamingRef.current) return;
     setMessages((current) => current.slice(0, current.findIndex((item) => item.id === message.id)));
     setInput(message.content);
-  };
+  }, []);
 
   const exportChat = (): void => {
     const markdown = messages
@@ -793,58 +883,16 @@ export function ChatView() {
           </div>
         )}
 
-        {messages.map((message) => {
-          const thinking = message.role === "assistant" && message.content === "" && message.tools.length === 0 && streaming;
-          const isLastAssistant = message.role === "assistant" && message.id === lastAssistantId;
-          return (
-            <div key={message.id} className={`msg ${message.role}`}>
-              <div className={`bubble ${message.role}`}>
-                {thinking && <Spinner label="思考中" />}
-                {message.content &&
-                  (message.role === "user" ? (
-                    <div className="user-text">{message.content}</div>
-                  ) : (
-                    <Markdown>{message.content}</Markdown>
-                  ))}
-                {message.tools.length > 1 ? (
-                  <details className="tool-group" open>
-                    <summary>工具调用 {message.tools.length} 次</summary>
-                    <div className="tool-list">
-                      {message.tools.map((tool, index) => (
-                        <ToolCardView key={index} tool={tool} />
-                      ))}
-                    </div>
-                  </details>
-                ) : (
-                  message.tools.length === 1 && (
-                    <div className="tool-list">
-                      <ToolCardView tool={message.tools[0] as ToolCard} />
-                    </div>
-                  )
-                )}
-              </div>
-
-              <div className="msg-actions">
-                {message.role === "assistant" && message.content && (
-                  <>
-                    <CopyButton text={message.content} />
-                    {isLastAssistant && !streaming && (
-                      <button type="button" className="copy-btn" onClick={() => void regenerate(message.id)}>
-                        重新生成
-                      </button>
-                    )}
-                    {typeof message.ms === "number" && <span className="msg-time">{formatMs(message.ms)}</span>}
-                  </>
-                )}
-                {message.role === "user" && !streaming && (
-                  <button type="button" className="copy-btn" onClick={() => editUser(message)}>
-                    编辑
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {messages.map((message) => (
+          <MessageRow
+            key={message.id}
+            message={message}
+            streaming={streaming}
+            isLastAssistant={message.role === "assistant" && message.id === lastAssistantId}
+            onRegenerate={regenerate}
+            onEdit={editUser}
+          />
+        ))}
         <div ref={bottomRef} />
       </div>
 
