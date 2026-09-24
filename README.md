@@ -3,7 +3,7 @@
 [![CI](https://github.com/Sayb1e/myblog/actions/workflows/ci.yml/badge.svg)](https://github.com/Sayb1e/myblog/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg)](https://nodejs.org/)
-[![version](https://img.shields.io/badge/version-1.2.1-informational.svg)](./CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.3.0-informational.svg)](./CHANGELOG.md)
 
 管理「基于 markdown 的本地学习仓」的**桌面应用**：进度总览 / 能力地图 / 每日总结，写回可 diff、可回滚、可 git。
 markdown 是唯一数据源，核心不调用任何 LLM——「今天干什么」由你或你用的 AI 判断。
@@ -14,12 +14,12 @@ markdown 是唯一数据源，核心不调用任何 LLM——「今天干什么�
 
 | 文件 | 说明 |
 | --- | --- |
-| `MyBlog_v1.2.1_setup.exe` | **安装版（推荐）**：中文向导 + 许可页；可选安装目录，建桌面/开始菜单快捷方式，带卸载项；装到用户目录，不需要管理员 |
-| `MyBlog_v1.2.1_portable.exe` | **免安装单文件**：双击即用，卸载 = 删掉这个文件 |
+| `MyBlog_v1.3.0_setup.exe` | **安装版（推荐）**：中文向导 + 许可页；可选安装目录，建桌面/开始菜单快捷方式，带卸载项；装到用户目录，不需要管理员 |
+| `MyBlog_v1.3.0_portable.exe` | **免安装单文件**：双击即用，卸载 = 删掉这个文件 |
 | `SHA256SUMS.txt` | 校验和（`certutil -hashfile <文件> SHA256` 对一下） |
 
 - **首次运行**：SmartScreen 会拦一次（exe 未做代码签名）→「更多信息」→「仍要运行」。
-- **首次启动让你选“学习库”目录**：随便建个文件夹即可，**空目录也能用**——概览页点「一键初始化」会生成最简结构。
+- **首次启动有向导**：选「学习库」目录（空文件夹也行）→ 配模型 → **用模型生成学习目标**（可选）→ 就绪。选空目录也能用，向导/概览会生成最简结构。
 - **数据在哪**：学习数据就是你那个文件夹里的 markdown；模型配置 / 对话历史 / 工作区白名单在 `%APPDATA%\@myblog\desktop`（设置里可改）。
 - **卸载**：删掉安装的程序（或 portable 文件）；想连配置一起清就再删上面的目录。
 
@@ -32,12 +32,15 @@ markdown 是唯一数据源，核心不调用任何 LLM——「今天干什么�
 ## 特色
 
 - **今天学什么**：把总览的「下次从哪继续」和当前阶段 G 能力取交集，直接给结论；「上次停在哪」一眼可见。
-- **能力地图**：点某个 G **就地展开**（验证问题 / 相关总结），可直接**改状态并写回 `GOALS.md`**；选中时时间线自动按该 G 筛选。
+- **AI 生成学习目标**：在「能力地图」点「生成 / 更新目标…」，用自然语言写你想学什么，模型整理成规范的 `GOALS.md`（生成前校验、格式不对自动重试、保存前可编辑预览）；首启向导里也能直接生成。
+- **能力地图**：点某个 G **就地展开**（验证问题 / 相关总结），可直接**改状态并写回 `GOALS.md`**；按学习记录显示每个 G 的**出现天数 / 最近日期**；选中时时间线自动按该 G 筛选。
 - **写回不炸 diff**：只替换目标段落 / 插入表格行，绝不整篇重写；幂等、保持原行尾、可 git 回滚。
-- **内置对话**：填自己的模型（OpenAI 兼容；本机 opencode 已登录可**一键导入** OpenCode Go / Zen）。工具调用（读工作区 / 写文件 / 写回总览）**默认先出 diff，你确认后才落盘**。
-- **文件 · 终端 · 搜索**：目录树 + markdown / 代码高亮 / 图片预览、右键复制路径；内置真终端（xterm.js + node-pty，切页面不中断）；`Ctrl+K` 全局搜索（命令 + 搜索总览/目标/各天总结内容）；校验页检查断链、未定义 G、缺总结、根目录附件。
+- **写入有备份**：覆盖写 `PROGRESS.md` / `GOALS.md` / `SUMMARY.md` 等之前，自动备份到工作区 `.myblog/backups/`（每文件留 20 份）。
+- **内置对话**：填自己的模型（OpenAI 兼容 / Anthropic，服务商预设含 OpenCode Go / Zen）。工具调用（读工作区 / 写文件 / 写回总览）**默认先出 diff，你确认后才落盘**；显示每条回答耗时与**上下文用量**（token 估算）。
+- **插件**：应用数据目录 `plugins/` 放插件即可扩展**命令面板命令 / agent 工具 / 后端接口**；开发见 [`docs/PLUGINS.md`](./docs/PLUGINS.md)。
+- **文件 · 终端 · 搜索**：目录树 + markdown / 代码高亮 / 图片预览（点击放大）、markdown 内链跳转、右键复制路径；内置真终端（xterm.js + node-pty，切页面不中断）；`Ctrl+K` 全局搜索（命令 + 搜索总览/目标/各天总结内容）；校验页检查断链、未定义 G、缺总结、根目录附件。
 - **多工作区 · 一键提交**：侧栏切换工作区；概览「版本」卡片显示分支与未提交改动，可 `git add -A` 一键提交。
-- **本地优先**：不开任何 TCP 端口、无数据库、无中转服务；主题（深/浅/跟随系统）、8 种强调色、字号可调。
+- **本地优先**：不开任何 TCP 端口、无数据库、无中转服务；主题（深/浅/跟随系统）、8 种强调色、字号可调；可开关的顶栏个性签名。
 
 ## 从源码跑（可选）
 
@@ -93,13 +96,21 @@ myblog init --agent opencode     # 只装 opencode
 - MCP 工具：`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`，以及读写普通文件的 `fs_list` / `fs_read` / `fs_write`（路径限制在工作区内）。
 - 重复执行幂等；已有文件默认跳过，`--force` 覆盖；`opencode.json` 与 `AGENTS.md` 只做合并/原地更新。
 
+## 插件
+
+外部插件放在应用数据目录的 `plugins/` 下（每个子目录一个插件，含 `plugin.json` + 入口），重启应用加载。可贡献三类能力：**命令面板命令**、**agent 工具**、**后端 handler**。设置 → 插件 可查看已安装与加载错误。
+
+完整开发文档（清单字段、入口结构、示例、调试、限制）：[`docs/PLUGINS.md`](./docs/PLUGINS.md)。
+
+> 目前插件在主进程内运行、**无沙箱**，只安装可信来源的插件。
+
 ## 架构
 
 ```
 @myblog/core     解析 / 生成 / 校验 / 组装（唯一引擎，无 LLM、无 DB）
 @myblog/agent    OpenAI 兼容模型客户端 + 工具调用循环（唯一持 key 的地方）
    ├── @myblog/cli      只读状态 / 初始化模板 / MCP server
-   ├── @myblog/server   与传输无关的工作区 API handler（不开端口）
+   ├── @myblog/server   与传输无关的工作区 API handler + 插件加载（不开端口）
    ├── @myblog/web      Vite + React 界面（由桌面端加载）
    └── @myblog/desktop  Electron：经 IPC 调用 @myblog/server + 真终端
 ```
@@ -126,8 +137,8 @@ npm run desktop          # 只构建并启动 Electron main（需先 build 过 w
 **终端里跑不了 `opencode` / `claude`？**
 终端是真实 PTY，工作目录是你的学习库；命令需要在系统 PATH 里（和普通 PowerShell 一样）。
 
-**能用 opencode 的登录吗？**
-能：对话 → 设置里点「导入 OpenCode Go / Zen」，会带着 key 与 baseURL 写入配置（OpenCode 网关的请求会自动补 `x-opencode-session`）。注意个别模型在该网关不可用（例如 Go 上的 `grok-4.6`），换成 `deepseek-v4-flash` 这类即可；Claude 系模型会自动走 Anthropic 格式。
+**能用 opencode 的网关吗？**
+能：对话 → 设置里「服务商预设」选 **OpenCode Go / Zen**（自动填 Base URL / Model），再把你的 key 填进去即可（对 OpenCode 网关的请求会自动补 `x-opencode-session`）。注意个别模型在该网关不可用（例如 Go 上的 `grok-4.6`），换成 `deepseek-v4-flash` 这类即可；Claude 系模型会自动走 Anthropic 格式。
 
 **杀软 / SmartScreen 报警？**
 exe 未做代码签名。用 Release 里的 `SHA256SUMS.txt` 校验来源，或从源码自行构建。
