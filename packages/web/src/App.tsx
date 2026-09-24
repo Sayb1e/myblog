@@ -50,6 +50,7 @@ import { WorkspaceFilesHelp } from "./components/WorkspaceFilesHelp.js";
 import { useToast } from "./hooks/useToasts.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { usePrefs } from "./prefs.js";
+import { computeAchievements } from "./achievements.js";
 import type { View } from "./view.js";
 
 const TerminalView = lazy(() =>
@@ -162,6 +163,46 @@ export function App() {
     }
     return streak;
   }, [activity]);
+
+  const achievements = useMemo(
+    () =>
+      computeAchievements({
+        summaryCount: summaries.length,
+        currentStreak,
+        capabilities: status?.capabilities ?? [],
+        chatted,
+      }),
+    [summaries.length, currentStreak, status?.capabilities, chatted],
+  );
+
+  useEffect(() => {
+    if (!status) return;
+    const doneIds = achievements.filter((item) => item.done).map((item) => item.id);
+    let stored: string[] | null = null;
+    try {
+      const raw = localStorage.getItem("myblog:achievements");
+      stored = raw ? (JSON.parse(raw) as string[]) : null;
+    } catch {
+      stored = null;
+    }
+    if (!Array.isArray(stored)) {
+      try {
+        localStorage.setItem("myblog:achievements", JSON.stringify(doneIds));
+      } catch {
+        // localStorage unavailable
+      }
+      return;
+    }
+    const known = new Set(stored);
+    const fresh = achievements.filter((item) => item.done && !known.has(item.id));
+    if (fresh.length === 0) return;
+    for (const item of fresh) toast("success", `解锁成就：${item.label}`);
+    try {
+      localStorage.setItem("myblog:achievements", JSON.stringify([...new Set([...known, ...doneIds])]));
+    } catch {
+      // localStorage unavailable
+    }
+  }, [achievements, status, toast]);
 
   const openDate = useCallback((value: string) => {
     setDate(value);
