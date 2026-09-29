@@ -6,12 +6,12 @@
 
 | 项 | 状态 |
 | --- | --- |
-| package 版本 | **1.3.2**（成就系统视觉重做：徽章 / 勋章墙 / 稀有度 / 进度环 / 筛选 / 详情弹窗） |
-| 最近已发布 | **v1.3.1**（GitHub Release：`MyBlog_v1.3.1_setup.exe` + `_portable.exe` + `SHA256SUMS.txt`；主分支与 tag 均已推送） |
-| 待发布 | **1.3.2**（未打包、未 tag；需要时按打包流程出包并 tag） |
-| 本地产物 | `packages/desktop/release/win-unpacked/MyBlog.exe`（1.3.1）；旧的 1.2.x 产物已删 |
+| package 版本 | **1.3.2**（成就游戏化重做 / 里程碑跨库聚合 / `fs_move` / 对话增强；本地 `win-unpacked` 已更新） |
+| 最近已发布 | **v1.3.2**（GitHub Release Latest：`MyBlog_v1.3.2_setup.exe` + `_portable.exe` + `SHA256SUMS.txt`；主分支与 tag 均已推送） |
+| 待发布 | 无（下次有用户可见改动时 bump 并 tag） |
+| 本地产物 | `packages/desktop/release/win-unpacked/MyBlog.exe`（1.3.2）；旧的 1.2.x 产物已删 |
 
-## 1.3.2 待发布
+## 1.3.2 已完成（已发布）
 
 - **成就系统视觉重做**：23 个独立徽章 SVG、勋章墙网格、青铜/白银/黄金稀有度、未解锁环形进度、状态+分类筛选、点击详情弹窗。逻辑在 `packages/web/src/achievements.ts`，徽章在 `packages/web/src/components/AchievementBadge.tsx`，视图在 `components/Milestones.tsx`。概览页已移除成就卡；里程碑页三列并排——成就（三行、列内上下滚动、右下角「全部成就」弹窗看完整成就墙）、热力图、曲线；详情弹窗居中。
 - **对话增强**：代码块带行号（左侧序号栏，横滚时固定）；输入框随内容自动加高（≤160px）；助手回复气泡加宽（`max-width: min(1100px, 92%)`，窄窗口 ≤900px 时铺满）；系统提示注入**当前系统时间**（`packages/agent/src/time.ts`，chat 与 goals 都用），模型不再猜日期。修 toast 层级低于弹窗（「测试连接」结果被设置框盖住）——toast `z-index` 50→200。
