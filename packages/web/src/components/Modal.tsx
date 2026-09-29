@@ -8,12 +8,17 @@ interface Props {
   children: ReactNode;
   className?: string;
   closeOnOverlay?: boolean;
+  /** 垂直居中显示（默认靠上） */
+  centered?: boolean;
 }
 
 const FOCUSABLE =
   "input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])";
 
-export function Modal({ open, title, onClose, children, className = "", closeOnOverlay = true }: Props) {
+// 打开中的弹窗栈；只有最上层响应 Esc / Tab，避免嵌套弹窗被一起关掉
+const modalStack: object[] = [];
+
+export function Modal({ open, title, onClose, children, className = "", closeOnOverlay = true, centered = false }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -21,10 +26,13 @@ export function Modal({ open, title, onClose, children, className = "", closeOnO
   // 只在打开时聚焦一次；键盘监听用 ref 取最新的 onClose，避免每次渲染重跑 effect 抢焦点
   useEffect(() => {
     if (!open) return;
+    const id = {};
+    modalStack.push(id);
     const panel = panelRef.current;
     (panel?.querySelector<HTMLElement>("[data-autofocus]") ?? panel?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
 
     const onKey = (event: KeyboardEvent): void => {
+      if (modalStack[modalStack.length - 1] !== id) return;
       if (event.key === "Escape") {
         event.stopPropagation();
         onCloseRef.current();
@@ -45,13 +53,17 @@ export function Modal({ open, title, onClose, children, className = "", closeOnO
     };
 
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    return () => {
+      const index = modalStack.indexOf(id);
+      if (index !== -1) modalStack.splice(index, 1);
+      window.removeEventListener("keydown", onKey, true);
+    };
   }, [open]);
 
   if (!open) return null;
 
   return (
-    <div className="palette-overlay" onClick={closeOnOverlay ? onClose : undefined}>
+    <div className={`palette-overlay${centered ? " centered" : ""}`} onClick={closeOnOverlay ? onClose : undefined}>
       <div ref={panelRef} className={`palette modal ${className}`} onClick={(event) => event.stopPropagation()}>
         {title !== undefined && (
           <div className="palette-input">

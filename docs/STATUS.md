@@ -6,10 +6,18 @@
 
 | 项 | 状态 |
 | --- | --- |
-| package 版本 | **1.3.1**（含终端 dock / 里程碑页 / 成就系统等；本地 `win-unpacked` 已更新） |
+| package 版本 | **1.3.2**（成就系统视觉重做：徽章 / 勋章墙 / 稀有度 / 进度环 / 筛选 / 详情弹窗） |
 | 最近已发布 | **v1.3.1**（GitHub Release：`MyBlog_v1.3.1_setup.exe` + `_portable.exe` + `SHA256SUMS.txt`；主分支与 tag 均已推送） |
-| 待发布 | 无（下次有用户可见改动时 bump 并 tag） |
+| 待发布 | **1.3.2**（未打包、未 tag；需要时按打包流程出包并 tag） |
 | 本地产物 | `packages/desktop/release/win-unpacked/MyBlog.exe`（1.3.1）；旧的 1.2.x 产物已删 |
+
+## 1.3.2 待发布
+
+- **成就系统视觉重做**：23 个独立徽章 SVG、勋章墙网格、青铜/白银/黄金稀有度、未解锁环形进度、状态+分类筛选、点击详情弹窗。逻辑在 `packages/web/src/achievements.ts`，徽章在 `packages/web/src/components/AchievementBadge.tsx`，视图在 `components/Milestones.tsx`。概览页已移除成就卡；里程碑页三列并排——成就（三行、列内上下滚动、右下角「全部成就」弹窗看完整成就墙）、热力图、曲线；详情弹窗居中。
+- **对话增强**：代码块带行号（左侧序号栏，横滚时固定）；输入框随内容自动加高（≤160px）；助手回复气泡加宽（`max-width: min(1100px, 92%)`，窄窗口 ≤900px 时铺满）；系统提示注入**当前系统时间**（`packages/agent/src/time.ts`，chat 与 goals 都用），模型不再猜日期。修 toast 层级低于弹窗（「测试连接」结果被设置框盖住）——toast `z-index` 50→200。
+- **新增 `fs_move` 工具**（`packages/agent/src/tools.ts` + `packages/cli/src/mcp.ts`）：工作区内移动/重命名/归档文件与目录，默认 dry-run 预览、目标已存在不覆盖。
+- **里程碑跨库聚合**：新增 server `milestones` handler（`handlers.ts`）汇总所有注册学习库的记录/总结/能力；`useWorkspace` 拉取，App 的 `activity` 与成就输入（`closedCapabilities`/`goalCount`）改用它，热力图/曲线/成就跨库。`MilestonesView` 在 >1 库时提示。
+- **修整体界面横向平移**：超长不可断文本自动换行（`.md`/`.bubble`/`.user-text` `overflow-wrap:anywhere`），宽表格用 `Markdown.tsx` 的 `table` 包一层 `.md-table-wrap`（内部横滚），`.content` 与 `body` 设 `overflow-x:hidden`。
 
 ## 1.3.1 已完成（已发布）
 

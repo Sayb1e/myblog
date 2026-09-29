@@ -6,6 +6,7 @@ import {
   type ChatMessage,
   type ProviderEvent,
 } from "./provider.js";
+import { currentTimeLine } from "./time.js";
 
 export interface GoalsDraftInput {
   text: string;
@@ -41,7 +42,7 @@ export const GOALS_DRAFT_SYSTEM = [
 export function buildGoalsDraftMessages(input: GoalsDraftInput): ChatMessage[] {
   const text = input.text.trim();
   return [
-    { role: "system", content: GOALS_DRAFT_SYSTEM },
+    { role: "system", content: `${GOALS_DRAFT_SYSTEM}\n\n${currentTimeLine()}` },
     {
       role: "user",
       content: `这是我的学习想法，请据此生成 GOALS.md：\n\n${text || "（用户没写具体内容，请给出一份通用的入门学习地图）"}`,

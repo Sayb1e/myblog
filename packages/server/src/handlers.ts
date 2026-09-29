@@ -60,6 +60,7 @@ import {
 } from "./storage.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const CLOSED = /已闭环|已通|已完成|闭环/;
 
 const WORKSPACE_AGENT_FILE = "myblog.agent.json";
 
@@ -287,6 +288,21 @@ export interface OpencodeModel {
   format: "openai" | "anthropic" | "other";
 }
 
+export interface MilestoneStats {
+  /** 日期 -> 当天记录数（合并所有学习库） */
+  activity: Record<string, number>;
+  /** 所有库的每日总结总数 */
+  summaryCount: number;
+  /** 所有库已闭环的能力总数 */
+  closedCapabilities: number;
+  /** 所有库的能力总数 */
+  goalCount: number;
+  /** 单个（库+能力）累计出现天数里的最大值 */
+  maxCapabilityDays: number;
+  /** 参与统计的学习库数量 */
+  libCount: number;
+}
+
 export interface MyBlogHandlers {
   status: () => Promise<StatusResponse>;
   init: () => Promise<{ created: string[] }>;
@@ -298,6 +314,7 @@ export interface MyBlogHandlers {
   check: () => Promise<CheckResult>;
   today: () => Promise<TodayPlan>;
   summaries: () => Promise<SummaryDoc[]>;
+  milestones: () => Promise<MilestoneStats>;
   summary: (payload: { date: string }) => Promise<{ exists: boolean; summary: SummaryDoc | null }>;
   saveSummary: (payload: { date: string; content: string }) => Promise<{ ok: true; path: string }>;
   patchProgress: (payload: Partial<ProgressSnapshot>) => Promise<{ ok: true; changed: boolean }>;
@@ -616,6 +633,72 @@ export function createApi(options: ApiOptions): MyBlogApi {
         }
       }
       return summaries;
+    },
+
+    milestones: async () => {
+      const storage = await getStorage();
+      const roots = storage.workspaces.length > 0 ? storage.workspaces : [storage.activeWorkspace];
+      const activity: Record<string, number> = {};
+      const capDays = new Map<string, Set<string>>();
+      let summaryCount = 0;
+      let closedCapabilities = 0;
+      let goalCount = 0;
+      let libCount = 0;
+
+      for (const root of roots) {
+        let workspace: Workspace;
+        try {
+          workspace = await Workspace.load(root);
+        } catch {
+          continue;
+        }
+
+        const local = new Map<string, number>();
+        try {
+          const { status } = await workspace.readStatusSafe();
+          if (status) {
+            for (const record of status.records) local.set(record.date, (local.get(record.date) ?? 0) + 1);
+            for (const capability of status.capabilities) {
+              goalCount += 1;
+              if (CLOSED.test(capability.status)) closedCapabilities += 1;
+            }
+          }
+        } catch {
+          // 该库暂时读不到总览，跳过能力统计
+        }
+
+        let dates: string[] = [];
+        try {
+          const entries = await readdir(root, { withFileTypes: true });
+          dates = entries.filter((entry) => entry.isDirectory() && DATE.test(entry.name)).map((entry) => entry.name);
+        } catch {
+          dates = [];
+        }
+        for (const date of dates) {
+          let doc: SummaryDoc;
+          try {
+            doc = await workspace.readSummary(date);
+          } catch {
+            continue;
+          }
+          summaryCount += 1;
+          if (!local.has(date)) local.set(date, 1);
+          for (const id of doc.skills) {
+            const key = `${root}::${id}`;
+            const set = capDays.get(key) ?? new Set<string>();
+            set.add(date);
+            capDays.set(key, set);
+          }
+        }
+
+        for (const [date, count] of local) activity[date] = (activity[date] ?? 0) + count;
+        libCount += 1;
+      }
+
+      let maxCapabilityDays = 0;
+      for (const set of capDays.values()) if (set.size > maxCapabilityDays) maxCapabilityDays = set.size;
+
+      return { activity, summaryCount, closedCapabilities, goalCount, maxCapabilityDays, libCount };
     },
 
     summary: async (payload) => {

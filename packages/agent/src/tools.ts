@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
   buildContext,
@@ -163,6 +163,24 @@ export function toolSpecs(): ToolSpec[] {
         },
       },
     },
+    {
+      type: "function",
+      function: {
+        name: "fs_move",
+        description:
+          "把工作区内的文件/目录移动或重命名到另一个相对路径（父目录会自动创建），用来整理归档（例如把当天的文件挪进 YYYY-MM-DD/）。默认 dryRun=true，只返回预览、不落盘；把预览给用户确认后，再以 dryRun=false 调用才真正移动。目标已存在会报错，不会覆盖。",
+        parameters: {
+          type: "object",
+          properties: {
+            from: { type: "string", description: "源相对路径" },
+            to: { type: "string", description: "目标相对路径" },
+            dryRun: { type: "boolean", description: "默认 true；确认后传 false 才移动" },
+          },
+          required: ["from", "to"],
+          additionalProperties: false,
+        },
+      },
+    },
   ];
 }
 
@@ -301,6 +319,53 @@ export async function executeTool(workspace: Workspace, name: string, args: Reco
         return { error: error instanceof Error ? error.message : String(error) };
       }
       return { path, dryRun: false, created: !exists, bytes: Buffer.byteLength(content, "utf8"), diff };
+    }
+
+    case "fs_move": {
+      const source = resolveOrError(workspace.root, args.from);
+      if (typeof source !== "string") return source;
+      const target = resolveOrError(workspace.root, args.to);
+      if (typeof target !== "string") return target;
+
+      const from = toRelative(workspace.root, source);
+      const to = toRelative(workspace.root, target);
+      if (from === to) return { error: "源和目标相同" };
+      const first = from.split("/")[0];
+      if (from === "." || first === ".myblog" || first === ".git") return { error: "不能移动工作区根目录 / .myblog / .git" };
+      const within = relative(source, target);
+      if (within !== "" && !within.startsWith("..") && !isAbsolute(within)) {
+        return { error: "不能移动到它自己的子目录里" };
+      }
+
+      let info;
+      try {
+        info = await stat(source);
+      } catch {
+        return { error: `源不存在：${from}` };
+      }
+      let conflict = false;
+      try {
+        await stat(target);
+        conflict = true;
+      } catch {
+        conflict = false;
+      }
+      if (conflict) return { error: `目标已存在：${to}（不会覆盖）` };
+
+      const kind = info.isDirectory() ? "dir" : "file";
+      const dryRun = args.dryRun !== false;
+      if (dryRun) {
+        return { from, to, kind, bytes: info.isDirectory() ? 0 : info.size, dryRun: true };
+      }
+
+      try {
+        if (info.isFile()) await workspace.backup(source);
+        await mkdir(dirname(target), { recursive: true });
+        await rename(source, target);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+      return { from, to, kind, dryRun: false, moved: true };
     }
 
     default:

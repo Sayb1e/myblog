@@ -18,6 +18,7 @@ import type {
   FileListing,
   GitState,
   GoalsDraftResult,
+  MilestoneStats,
   OpencodeAuthView,
   PluginInfo,
   SearchHit,
@@ -39,6 +40,7 @@ export type {
   GitState,
   GoalsDraftResult,
   GoalsValidation,
+  MilestoneStats,
   OpencodeAuthView,
   PluginInfo,
   SearchHit,
@@ -74,6 +76,8 @@ export const getStatus = (): Promise<StatusResponse> => call("status");
 export const getToday = (): Promise<TodayPlan> => call("today");
 export const getCheck = (): Promise<CheckResult> => call("check");
 export const getSummaries = (): Promise<SummaryDoc[]> => call("summaries");
+
+export const getMilestoneStats = (): Promise<MilestoneStats> => call("milestones");
 
 export const getSummary = (date: string): Promise<{ exists: boolean; summary: SummaryDoc | null }> =>
   call("summary", { date });

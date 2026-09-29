@@ -17,3 +17,6 @@ test_1/
 .vscode/
 *.swp
 
+# 本地 AI 工作临时目录
+.opencode-tmp/
+

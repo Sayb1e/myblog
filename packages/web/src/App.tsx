@@ -33,7 +33,6 @@ import { GitCard } from "./components/GitCard.js";
 import { GoalsGenerator } from "./components/GoalsGenerator.js";
 import { IconPencil, IconTrash } from "./components/icons.js";
 import { MarkdownProvider } from "./components/Markdown.js";
-import { Milestones } from "./components/Milestones.js";
 import { MilestonesView } from "./components/MilestonesView.js";
 import { Onboarding } from "./components/Onboarding.js";
 import { ProgressCard } from "./components/ProgressCard.js";
@@ -50,7 +49,7 @@ import { WorkspaceFilesHelp } from "./components/WorkspaceFilesHelp.js";
 import { useToast } from "./hooks/useToasts.js";
 import { useWorkspace } from "./hooks/useWorkspace.js";
 import { usePrefs } from "./prefs.js";
-import { computeAchievements, rememberAchievementTimes } from "./achievements.js";
+import { computeAchievements, isClosedStatus, rememberAchievementTimes } from "./achievements.js";
 import { readEvents, setEvent, type Events } from "./events.js";
 import type { View } from "./view.js";
 
@@ -70,7 +69,7 @@ const TITLES: Record<View, string> = {
 };
 
 export function App() {
-  const { status, today, check, summaries, loading, error, connected, refresh } = useWorkspace();
+  const { status, today, check, summaries, milestones, loading, error, connected, refresh } = useWorkspace();
   const { prefs, setPref } = usePrefs();
   const toast = useToast();
   const [view, setView] = useState<View>("overview");
@@ -150,10 +149,15 @@ export function App() {
 
   const activity = useMemo(() => {
     const map = new Map<string, number>();
+    const merged = milestones?.activity;
+    if (merged) {
+      for (const [date, count] of Object.entries(merged)) map.set(date, count);
+      return map;
+    }
     for (const record of status?.records ?? []) map.set(record.date, (map.get(record.date) ?? 0) + 1);
     for (const summary of summaries) if (!map.has(summary.date)) map.set(summary.date, 1);
     return map;
-  }, [summaries, status?.records]);
+  }, [milestones, summaries, status?.records]);
 
   const currentStreak = useMemo(() => {
     const fmt = (date: Date): string =>
@@ -180,19 +184,36 @@ export function App() {
     return max;
   }, [skillsByDate]);
 
+  const localClosed = useMemo(
+    () => (status?.capabilities ?? []).filter((capability) => isClosedStatus(capability.status)).length,
+    [status?.capabilities],
+  );
+
   const achievements = useMemo(
     () =>
       computeAchievements({
-        summaryCount: summaries.length,
+        summaryCount: milestones?.summaryCount ?? summaries.length,
         currentStreak,
         activityDays: activity.size,
-        capabilities: status?.capabilities ?? [],
-        maxCapabilityDays,
+        closedCapabilities: milestones?.closedCapabilities ?? localClosed,
+        goalCount: milestones?.goalCount ?? status?.capabilities.length ?? 0,
+        maxCapabilityDays: milestones?.maxCapabilityDays ?? maxCapabilityDays,
         chatted,
         pluginCount,
         events,
       }),
-    [summaries.length, currentStreak, activity, status?.capabilities, maxCapabilityDays, chatted, pluginCount, events],
+    [
+      milestones,
+      summaries.length,
+      currentStreak,
+      activity,
+      localClosed,
+      status?.capabilities,
+      maxCapabilityDays,
+      chatted,
+      pluginCount,
+      events,
+    ],
   );
 
   useEffect(() => {
@@ -627,7 +648,6 @@ export function App() {
                       onOpen={openDate}
                     />
                   )}
-                  {status && <Milestones achievements={achievements} />}
                   <GitCard onCommitted={refresh} />
                 </div>
               )}
@@ -637,7 +657,7 @@ export function App() {
 
         {visited.milestones && (
           <div className={viewClass("milestones")}>
-            {status && <MilestonesView activity={activity} achievements={achievements} />}
+            {status && <MilestonesView activity={activity} achievements={achievements} libCount={milestones?.libCount} />}
           </div>
         )}
 

@@ -18,6 +18,7 @@ export type {
   FileEntry,
   FileListing,
   GitState,
+  MilestoneStats,
   MyBlogApi,
   MyBlogHandlers,
   OpencodeAuthView,

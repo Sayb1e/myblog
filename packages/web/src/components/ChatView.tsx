@@ -245,6 +245,7 @@ export function ChatView() {
   const [quoteDates, setQuoteDates] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
@@ -275,6 +276,13 @@ export function ChatView() {
   }, [messages]);
   const contextRatio = Math.min(1, usedTokens / contextLimit);
   const contextLevel = contextRatio >= 0.85 ? "high" : contextRatio >= 0.6 ? "warn" : "ok";
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
   const saveTargetLabel =
     saveTarget === "workspace-file"
       ? "工作区文件 myblog.agent.json"
@@ -921,6 +929,7 @@ export function ChatView() {
 
       <div className="chat-input">
         <textarea
+          ref={inputRef}
           value={input}
           placeholder="今天学什么？（Enter 发送，Shift+Enter 换行）"
           onChange={(event) => setInput(event.target.value)}

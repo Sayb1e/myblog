@@ -96,3 +96,51 @@ describe("fs_read / fs_list", () => {
     expect(names).toContain("a.txt");
   });
 });
+
+describe("fs_move", () => {
+  it("暴露 fs_move 工具", () => {
+    expect(toolSpecs().map((spec) => spec.function.name)).toContain("fs_move");
+  });
+
+  it("dryRun 只返回预览，不移动", async () => {
+    const workspace = await makeWorkspace();
+    await writeFile(path.join(workspace.root, "a.py"), "print(1)\n", "utf8");
+    const result = (await executeTool(workspace, "fs_move", { from: "a.py", to: "2026-09-26/a.py" })) as {
+      dryRun: boolean;
+      kind: string;
+    };
+
+    expect(result.dryRun).toBe(true);
+    expect(result.kind).toBe("file");
+    expect(existsSync(path.join(workspace.root, "a.py"))).toBe(true);
+    expect(existsSync(path.join(workspace.root, "2026-09-26", "a.py"))).toBe(false);
+  });
+
+  it("dryRun:false 移动文件并创建父目录", async () => {
+    const workspace = await makeWorkspace();
+    await writeFile(path.join(workspace.root, "a.py"), "print(1)\n", "utf8");
+    await executeTool(workspace, "fs_move", { from: "a.py", to: "2026-09-26/a.py", dryRun: false });
+
+    expect(existsSync(path.join(workspace.root, "a.py"))).toBe(false);
+    expect(await readFile(path.join(workspace.root, "2026-09-26", "a.py"), "utf8")).toBe("print(1)\n");
+  });
+
+  it("目标已存在时报错，不覆盖", async () => {
+    const workspace = await makeWorkspace();
+    await writeFile(path.join(workspace.root, "a.txt"), "A", "utf8");
+    await writeFile(path.join(workspace.root, "b.txt"), "B", "utf8");
+    const result = (await executeTool(workspace, "fs_move", { from: "a.txt", to: "b.txt", dryRun: false })) as {
+      error?: string;
+    };
+
+    expect(result.error).toContain("已存在");
+    expect(await readFile(path.join(workspace.root, "a.txt"), "utf8")).toBe("A");
+    expect(await readFile(path.join(workspace.root, "b.txt"), "utf8")).toBe("B");
+  });
+
+  it("拒绝越界路径", async () => {
+    const workspace = await makeWorkspace();
+    const result = (await executeTool(workspace, "fs_move", { from: "a.txt", to: "../evil.txt" })) as { error?: string };
+    expect(result.error).toContain("超出工作区");
+  });
+});

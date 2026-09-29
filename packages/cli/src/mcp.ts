@@ -149,6 +149,21 @@ export function createMcpServer(workspace: Workspace): McpServer {
       json(await executeTool(workspace, "fs_write", { path, content, dryRun: dryRun !== false })),
   );
 
+  server.registerTool(
+    "fs_move",
+    {
+      title: "Move / rename a workspace file",
+      description:
+        "把工作区内的文件/目录移动或重命名到另一个相对路径（父目录会自动创建），用于整理归档（如把当天文件挪进 YYYY-MM-DD/）。默认 dryRun=true，只返回预览、不落盘；确认后再以 dryRun=false 调用。目标已存在会报错，不会覆盖。",
+      inputSchema: {
+        from: z.string().describe("源相对路径"),
+        to: z.string().describe("目标相对路径"),
+        dryRun: z.boolean().optional().describe("默认 true；确认后传 false 才移动"),
+      },
+    },
+    async ({ from, to, dryRun }) => json(await executeTool(workspace, "fs_move", { from, to, dryRun: dryRun !== false })),
+  );
+
   return server;
 }
 

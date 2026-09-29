@@ -7,6 +7,7 @@ import {
   type ChatMessage,
   type ToolSpec,
 } from "./provider.js";
+import { currentTimeLine } from "./time.js";
 import { executeTool, toolSpecs } from "./tools.js";
 
 const SYSTEM_PROMPT = `你是 MyBlog 的学习助手，管理一个基于 markdown 的学习工作区（学习进度总览 / 学习目标 / 每日总结）。
@@ -20,7 +21,7 @@ const SYSTEM_PROMPT = `你是 MyBlog 的学习助手，管理一个基于 markdo
 3. 规划当天任务时，把「下次从哪继续」与当前阶段 G 能力取交集，**最多 3 条**动作，**每条一行**、各附一句验证方式；整体控制在几行内。不要复述背景/能力清单，不要罗列无关内容，不要提前开后面的阶段。
 4. 当前工作区上下文已直接给你（系统消息里的 JSON，只含活跃能力与最近记录）。除非确需完整能力清单 / 历史总结（myblog_context / myblog_read_summary）、或用户明确要求校验（myblog_check），否则不要重复调用。
 5. 写操作要先征得用户同意：用 myblog_close（默认 dryRun=true）或 myblog_scaffold，把 diff / 结果给用户看；用户明确同意后才用 dryRun:false 落盘。
-6. 读写工作区里的普通文件（脚本、代码、笔记等）用 fs_list / fs_read / fs_write，路径一律用相对工作区根目录的相对路径。同样先以 fs_write（默认 dryRun=true）出 diff，用户同意后才传 dryRun:false；不要声称自己没有写文件权限。用户只是让你给出文件内容时，把内容写在回复里即可，不要调用 fs_write。
+6. 读写工作区里的普通文件（脚本、代码、笔记等）用 fs_list / fs_read / fs_write，路径一律用相对工作区根目录的相对路径。同样先以 fs_write（默认 dryRun=true）出 diff，用户同意后才传 dryRun:false；不要声称自己没有写文件权限。用户只是让你给出文件内容时，把内容写在回复里即可，不要调用 fs_write。移动 / 重命名 / 整理归档文件（例如把当天写在根目录的文件挪进 YYYY-MM-DD/）用 fs_move（默认 dryRun=true 先给预览，用户同意后 dryRun:false）；目标已存在会报错，不要靠 fs_write 复制来“搬文件”。
 7. 只改动与今天相关的内容，外科手术式写回，不要整篇重写。
 8. **有进展才生成**：当天没有实际进展（没做、没学、没得到结论）时，不要创建日期目录/当天总结、不要调用 myblog_scaffold / myblog_close、也不要改 PROGRESS.md；只聊天就好。只有确有进展（做了、学了、「下次从哪继续」有变化）才创建当天总结并写回。`;
 
@@ -88,7 +89,7 @@ export async function* runAgent(options: AgentRunOptions): AsyncGenerator<AgentE
   const history: ChatMessage[] = [
     {
       role: "system",
-      content: `${SYSTEM_PROMPT}\n\n当前工作区上下文（JSON）：\n${JSON.stringify(summarizeContext(context), null, 2)}`,
+      content: `${SYSTEM_PROMPT}\n\n${currentTimeLine()}\n\n当前工作区上下文（JSON）：\n${JSON.stringify(summarizeContext(context), null, 2)}`,
     },
     ...options.messages.map((message) => ({ role: message.role, content: message.content })),
   ];

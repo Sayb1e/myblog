@@ -22,6 +22,7 @@ interface Props {
 
 export function CodeBlock({ language, code, children }: Props) {
   const [copied, setCopied] = useState(false);
+  const lineCount = code === "" ? 1 : code.split("\n").length;
 
   const copy = async (): Promise<void> => {
     try {
@@ -41,7 +42,14 @@ export function CodeBlock({ language, code, children }: Props) {
           {copied ? "已复制" : "复制"}
         </button>
       </div>
-      <pre>{children}</pre>
+      <div className="code-body">
+        <div className="code-gutter" aria-hidden="true">
+          {Array.from({ length: lineCount }, (_, index) => (
+            <span key={index}>{index + 1}</span>
+          ))}
+        </div>
+        <pre>{children}</pre>
+      </div>
     </div>
   );
 }

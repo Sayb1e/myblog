@@ -12,6 +12,9 @@ const exec = promisify(execFile);
 const roots: string[] = [];
 let gitAvailable = false;
 
+// 测试进程的 TEMP 可能被重定向到仓库内的目录，避免 git 把临时工作区误判成「已有仓库」
+process.env.GIT_CEILING_DIRECTORIES = tmpdir();
+
 async function hasGit(): Promise<boolean> {
   try {
     await exec("git", ["--version"]);
@@ -507,5 +510,43 @@ describe("git", () => {
 
     const after = (await api.dispatch("git")) as { dirty: number };
     expect(after.dirty).toBe(0);
+  });
+});
+
+describe("milestones", () => {
+  async function writeSummary(root: string, date: string, skill: string): Promise<void> {
+    await mkdir(path.join(root, date), { recursive: true });
+    await writeFile(
+      path.join(root, date, "SUMMARY.md"),
+      `# ${date}\n\n## 前情提要\n\nx\n\n## 这次\n\n能力：${skill}\n\n## 下次从哪继续\n\ny\n`,
+      "utf8",
+    );
+  }
+
+  it("合并所有学习库的进展", async () => {
+    const a = await mkdtemp(path.join(tmpdir(), "myblog-lib-a-"));
+    const b = await mkdtemp(path.join(tmpdir(), "myblog-lib-b-"));
+    roots.push(a, b);
+    await writeSummary(a, "2026-09-20", "G1");
+    await writeSummary(a, "2026-09-21", "G1");
+    await writeSummary(b, "2026-09-21", "G2");
+
+    const api = createApi({
+      root: a,
+      workspaces: [a, b],
+      agentConfigPath: path.join(a, "config", "agent.json"),
+    });
+    const stats = (await api.dispatch("milestones")) as {
+      activity: Record<string, number>;
+      summaryCount: number;
+      maxCapabilityDays: number;
+      libCount: number;
+    };
+
+    expect(stats.libCount).toBe(2);
+    expect(stats.summaryCount).toBe(3);
+    expect(Object.keys(stats.activity).sort()).toEqual(["2026-09-20", "2026-09-21"]);
+    expect(stats.activity["2026-09-21"]).toBe(2);
+    expect(stats.maxCapabilityDays).toBe(2);
   });
 });

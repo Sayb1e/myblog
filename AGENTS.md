@@ -61,6 +61,7 @@ npm run app            # build 全部 + 启动 Electron
 - 图标：`node packages/desktop/scripts/make-icons.mjs` 生成 `packages/desktop/build/`（512 PNG + 多尺寸 ICO + NSIS 侧栏/头部 BMP）；换品牌色后重跑。
 - 打包：先 `npm run build`（core→agent→server→cli→web）**再 `npm run build --workspace @myblog/desktop`**——根 `npm run build` 不含 Electron main，漏掉会把旧 main.js 打进包。然后
   `$env:ELECTRON_BUILDER_BINARIES_MIRROR="..." ; npx electron-builder --win portable|--win --dir`（在 `packages/desktop` 下）。
+- **本地日常流程（默认这么做）**：每次改完并 bump 版本后，直接跑上面三步 + `--win --dir`，把 `packages/desktop/release/win-unpacked/MyBlog.exe` 更新到最新（先关掉正在运行的 MyBlog）。不要只停在 `npm run build`——用户看的是这个 exe。只有正式发版才出 `portable` / `nsis` 安装包。
 - 无端口架构：桌面端不再起 HTTP 服务，main 通过 IPC（`myblog:invoke` / `myblog:chat-event` / `myblog:fs-change`）调用 `@myblog/server` 的 `createApi()`。
 - 冒烟：`$env:MYBLOG_DESKTOP_SMOKE="1"; $env:MYBLOG_DESKTOP_ROOT="<工作区>"` 启动 exe，会打印 `SMOKE_OK` 与页面文本；加 `"pty"` 再验终端。
 - 调试渲染进程：`MYBLOG_DESKTOP_SMOKE="1"` + `MYBLOG_DESKTOP_EVAL="<js>"` 会在页面里执行该表达式并打印 `SMOKE_EVAL=`（用于量坐标等，别在正式功能里依赖）。

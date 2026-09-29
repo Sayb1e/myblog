@@ -45,6 +45,11 @@ export function Markdown({ children, inline, onNavigate }: Props) {
         </CodeBlock>
       );
     },
+    table: ({ children }) => (
+      <div className="md-table-wrap">
+        <table>{children}</table>
+      </div>
+    ),
     a: ({ href, children: label }) => {
       const date = dateFromHref(href);
       if (date && openDate) {
