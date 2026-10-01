@@ -6,12 +6,12 @@
 
 | 项 | 状态 |
 | --- | --- |
-| package 版本 | **1.4.0**（周复盘 / 全局快记收件箱 / AI 跨库只读检索；未打 tag） |
-| 最近已发布 | **v1.3.2**（GitHub Release Latest：`MyBlog_v1.3.2_setup.exe` + `_portable.exe` + `SHA256SUMS.txt`；主分支与 tag 均已推送） |
-| 待发布 | **v1.4.0**（周复盘 + 收件箱 + 跨库读；发布流程：commit/push → 打 `v1.4.0` tag → CI 建 Release） |
-| 本地产物 | `packages/desktop/release/win-unpacked/MyBlog.exe`（1.4.0，已随最近改动重打包） |
+| package 版本 | **1.4.0**（收获收件箱 / live preview / AI 跨库读 / 动态规划 / 备份恢复等；本地 win-unpacked 已更新） |
+| 最近已发布 | **v1.4.0**（GitHub Release Latest：`MyBlog_v1.4.0_setup.exe` + `_portable.exe` + `SHA256SUMS.txt`；主分支与 tag 均已推送） |
+| 待发布 | 无（下次有用户可见改动时 bump 并 tag） |
+| 本地产物 | `packages/desktop/release/win-unpacked/MyBlog.exe`（1.4.0） |
 
-## 1.4.0 已完成（待发布）
+## 1.4.0 已完成（已发布）
 
 - **动态规划（对话内）**：`chat.ts` 系统提示规定——问「今天 / 接下来学什么、准备学什么、帮我安排一下」这类规划问题时，先自动回顾**计划内**（注入的能力/记录）+ **计划外**（收件箱），必要时用只读工具补齐，**回顾之后再给动态规划**并附依据。周复盘功能已按用户要求彻底移除（无 `review.ts` / `REVIEW-*.md` / 复盘日志）。
 - **收获收件箱（独立页面 · 目录 · 双模式）**：侧栏「收件箱」→ `InboxView`（左列表 + 右编辑，默认一天一个文件、可新建/切换、约 1.2s 自动保存 / `Ctrl+S`）；编辑分**源码模式**与**编辑模式**——编辑模式是 **Obsidian 式 live preview**（`MarkdownLiveEditor`：CodeMirror 6 + `@codemirror/lang-markdown`，自写 ViewPlugin 装饰：非当前行隐藏标记、当前行显示源码；文档保持原始 Markdown 不改写）。结构化文档仍源码 + 实时预览。server：`inboxList` / `inboxRead` / `inboxWrite`。路径 `StorageSettings.inboxDir`（默认 `~/.myblog/inbox`）。`InboxView` 懒加载。
