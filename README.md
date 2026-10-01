@@ -3,10 +3,10 @@
 [![CI](https://github.com/Sayb1e/myblog/actions/workflows/ci.yml/badge.svg)](https://github.com/Sayb1e/myblog/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg)](https://nodejs.org/)
-[![version](https://img.shields.io/badge/version-1.3.0-informational.svg)](./CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.4.0-informational.svg)](./CHANGELOG.md)
 
-管理「基于 markdown 的本地学习仓」的**桌面应用**：进度总览 / 能力地图 / 每日总结，写回可 diff、可回滚、可 git。
-markdown 是唯一数据源，核心不调用任何 LLM——「今天干什么」由你或你用的 AI 判断。
+管理「基于 markdown 的本地学习仓」的**桌面应用**：进度总览 / 能力地图 / 每日总结 / 里程碑，写回可 diff、可回滚、可 git。
+markdown 是唯一数据源；另带一个**内置微型 Agent**（可选）帮你回顾已学、动态规划——核心本身不依赖任何 LLM。
 
 ## 下载即用（Windows）
 
@@ -14,8 +14,8 @@ markdown 是唯一数据源，核心不调用任何 LLM——「今天干什么�
 
 | 文件 | 说明 |
 | --- | --- |
-| `MyBlog_v1.3.0_setup.exe` | **安装版（推荐）**：中文向导 + 许可页；可选安装目录，建桌面/开始菜单快捷方式，带卸载项；装到用户目录，不需要管理员 |
-| `MyBlog_v1.3.0_portable.exe` | **免安装单文件**：双击即用，卸载 = 删掉这个文件 |
+| `MyBlog_v1.4.0_setup.exe` | **安装版（推荐）**：中文向导 + 许可页；可选安装目录，建桌面/开始菜单快捷方式，带卸载项；装到用户目录，不需要管理员 |
+| `MyBlog_v1.4.0_portable.exe` | **免安装单文件**：双击即用，卸载 = 删掉这个文件 |
 | `SHA256SUMS.txt` | 校验和（`certutil -hashfile <文件> SHA256` 对一下） |
 
 - **首次运行**：SmartScreen 会拦一次（exe 未做代码签名）→「更多信息」→「仍要运行」。
@@ -33,13 +33,14 @@ markdown 是唯一数据源，核心不调用任何 LLM——「今天干什么�
 
 - **今天学什么**：把总览的「下次从哪继续」和当前阶段 G 能力取交集，直接给结论；「上次停在哪」一眼可见。
 - **AI 生成学习目标**：在「能力地图」点「生成 / 更新目标…」，用自然语言写你想学什么，模型整理成规范的 `GOALS.md`（生成前校验、格式不对自动重试、保存前可编辑预览）；首启向导里也能直接生成。
-- **动态规划 + 收获收件箱**：侧栏「收件箱」是一个**目录**（默认一天一个 `.md`，可自由新建 / 切换），把计划外学到的东西像写笔记一样记下来；当你在对话里问「今天 / 接下来学什么、帮我安排一下」时，学习助手会**自动回顾计划内记录 + 计划外收件箱，并跨库检索**，据此给出带依据的下一步安排。
 - **能力地图**：点某个 G **就地展开**（验证问题 / 相关总结），可直接**改状态并写回 `GOALS.md`**；按学习记录显示每个 G 的**出现天数 / 最近日期**；选中时时间线自动按该 G 筛选。
 - **写回不炸 diff**：只替换目标段落 / 插入表格行，绝不整篇重写；幂等、保持原行尾、可 git 回滚。
-- **写入有备份**：覆盖写 `PROGRESS.md` / `GOALS.md` / `SUMMARY.md` 等之前，自动备份到工作区 `.myblog/backups/`（每文件留 20 份）。
-- **内置对话**：填自己的模型（OpenAI 兼容 / Anthropic，服务商预设含 OpenCode Go / Zen）。工具调用（读工作区 / 写文件 / 写回总览）**默认先出 diff，你确认后才落盘**；显示每条回答耗时与**上下文用量**（token 估算）。
+- **内置微型 Agent（对话）**：一个受限的**本地 agent**——你填自己的模型（OpenAI 兼容 / Anthropic，预设含 OpenCode Go / Zen），它带一个**工具循环**：读工作区 / 读写普通文件 / 写回总览 / **跨库只读检索**（`myblog_search_all`，可搜所有学习库 + 收件箱）。**写操作默认 dry-run 先出 diff、你确认后才落盘**；路径锁在工作区内、不联网第三方。问「今天 / 接下来学什么、帮我安排一下」时，它会**先回顾计划内记录 + 计划外收件箱、并跨库检索**，再给带依据的动态规划。
+- **里程碑**：**学习热力图**（连续 / 最长 / 有进展天数）+ **学习曲线** + **成就**，跨所有学习库合并统计；**点热力图某天**可看当天进展明细（记录 / 总结 / 收件箱）。
+- **收获收件箱**：侧栏「收件箱」是一个**目录**（默认一天一个 `.md`，可新建 / 重命名 / 删除 / 过滤），编辑支持**源码模式 / Obsidian 式 live preview**；计划外学到的东西随手记，带日期的笔记也计入里程碑。
+- **备份与恢复**：覆盖写 `PROGRESS.md` / `GOALS.md` / `SUMMARY.md` 等之前自动备份到 `.myblog/backups/`（每文件留 20 份）；设置 → 存储（或命令面板）可查看某份备份并**一键恢复**。
 - **插件**：应用数据目录 `plugins/` 放插件即可扩展**命令面板命令 / agent 工具 / 后端接口**；开发见 [`docs/PLUGINS.md`](./docs/PLUGINS.md)。
-- **文件 · 终端 · 搜索**：目录树 + markdown / 代码高亮 / 图片预览（点击放大）、markdown 内链跳转、右键复制路径；内置真终端（xterm.js + node-pty，切页面不中断）；`Ctrl+K` 全局搜索（命令 + 搜索总览/目标/各天总结内容）；校验页检查断链、未定义 G、缺总结、根目录附件。
+- **文件 · 终端 · 搜索**：目录树 + markdown / 代码高亮 / 图片预览（点击放大）、markdown 内链跳转、右键复制路径；内置真终端（xterm.js + node-pty，可升起为底部 dock、切页不中断）；`Ctrl+K` 全局搜索（命令 + 搜索总览/目标/各天总结内容）；校验页检查断链、未定义 G、缺总结、根目录附件。
 - **多工作区 · 一键提交**：侧栏切换工作区；概览「版本」卡片显示分支与未提交改动，可 `git add -A` 一键提交。
 - **本地优先**：不开任何 TCP 端口、无数据库、无中转服务；主题（深/浅/跟随系统）、8 种强调色、字号可调；可开关的顶栏个性签名。
 
@@ -78,9 +79,9 @@ learning-workspace/
 - `GOALS.md` **可选**：没有它也能用（阶段与能力地图为空，校验只给一条警告）。
 - 文件名可用根目录 `myblog.config.json` 覆盖：`{ "overview": "PROGRESS.md", "goals": "GOALS.md", "summaryFile": "SUMMARY.md" }`。旧的 `总结.md` 在首次读取时会自动改名为 `SUMMARY.md` 并同步总览里的链接。
 
-## 接入 AI agent
+## 接入外部 AI agent
 
-MyBlog 与 agent 无关：**契约是 MCP 工具**，各家的命令 / skill 只是薄壳，由 `init` 生成：
+除了内置对话，MyBlog 也能把工作区接给外部 agent（opencode / Claude Code / Cursor）：**契约是 MCP 工具**，各家的命令 / skill 只是薄壳，由 `init` 生成：
 
 ```bash
 myblog init --agent all          # opencode + claude + cursor + AGENTS.md
@@ -94,7 +95,7 @@ myblog init --agent opencode     # 只装 opencode
 | Cursor | `.cursor/commands/{today,close}.md` |
 | 通用 | `AGENTS.md` 里的托管块（`<!-- myblog:start --> … <!-- myblog:end -->`，不动你已有内容） |
 
-- MCP 工具：`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`，以及读写普通文件的 `fs_list` / `fs_read` / `fs_write`（路径限制在工作区内）。
+- MCP 工具：`myblog_context`、`myblog_check`、`myblog_read_summary`、`myblog_scaffold`、`myblog_close`，以及读写普通文件的 `fs_list` / `fs_read` / `fs_write` / `fs_move`（路径限制在工作区内）。外部 agent 与内置对话**共用同一套沙箱**。
 - 重复执行幂等；已有文件默认跳过，`--force` 覆盖；`opencode.json` 与 `AGENTS.md` 只做合并/原地更新。
 
 ## 插件
