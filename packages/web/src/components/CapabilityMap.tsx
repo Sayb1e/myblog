@@ -183,7 +183,7 @@ export function CapabilityMap({
           </button>
         )}
         {onDraftGoals && (
-          <button type="button" className="ghost btn-sm" onClick={onDraftGoals} data-tip="用模型按你的想法重写 GOALS.md">
+          <button type="button" className="ghost btn-sm" onClick={onDraftGoals}>
             生成 / 更新目标…
           </button>
         )}
@@ -200,7 +200,6 @@ export function CapabilityMap({
                   className={`capability${isActive ? " selected" : ""}${entry.active ? " current" : ""}`}
                   role="button"
                   tabIndex={0}
-                  data-tip={`${entry.id} ${entry.name} — ${entry.question}`}
                   onClick={() => onSelect(isActive ? null : entry.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -218,7 +217,7 @@ export function CapabilityMap({
                   </span>
                   <span className="cap-row cap-row-progress">
                     {params(entry.status, used).map((param) => (
-                      <span key={param.key} className="cap-param" data-tip={param.tip}>
+                      <span key={param.key} className="cap-param">
                         <span className="cap-param-label">{param.label}</span>
                         <span className="cap-param-bar">
                           <i style={{ width: `${Math.round(param.ratio * 100)}%` }} />

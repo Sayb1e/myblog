@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -26,6 +26,7 @@ import {
 } from "@myblog/agent";
 import {
   Workspace,
+  buildContext,
   buildPlan,
   emptyStatus,
   updateProgress,
@@ -188,6 +189,123 @@ async function assertWritableHistoryDir(input: string): Promise<void> {
   }
 }
 
+async function assertWritableInboxDir(input: string): Promise<void> {
+  const resolved = path.resolve(input);
+  if (path.parse(resolved).root === resolved) {
+    throw new Error("收件箱要填一个目录路径（例如 D:\\Work\\inbox），不能是盘符根目录");
+  }
+  const info = await stat(resolved).catch(() => null);
+  if (info && !info.isDirectory()) {
+    throw new Error("收件箱要填目录路径，不能是文件（例如 D:\\Work\\inbox）");
+  }
+}
+
+/** 收件箱文件名：只允许安全字符，必须以 .md 结尾 */
+function inboxFileName(input: unknown, fallback: string): string {
+  const raw = typeof input === "string" && input.trim() !== "" ? input.trim() : fallback;
+  const base = path.basename(raw);
+  if (!/^[\w\u4e00-\u9fff .()-]+\.md$/i.test(base)) {
+    throw new Error("文件名要合法（字母/数字/中文/空格 . - _），并以 .md 结尾");
+  }
+  return base;
+}
+
+function inboxDateName(now: Date = new Date()): string {
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.md`;
+}
+
+/** 备份文件名 `<safe>.<stamp>.bak`，safe 是相对路径把分隔符换成 `__` */
+function parseBackupName(name: string): { safe: string; stamp: string } | null {
+  const match = /^(.*)\.(\d{4}-\d{2}-\d{2}T[\d-]+Z)\.bak$/.exec(name);
+  return match ? { safe: match[1] as string, stamp: match[2] as string } : null;
+}
+
+interface CrossLibHit {
+  lib: string;
+  path: string;
+  date: string | null;
+  line: number;
+  text: string;
+}
+
+/** 只读：在所有学习库（含收件箱）里搜关键词，给 AI 做跨库检索用 */
+async function crossLibSearch(
+  roots: string[],
+  inboxDir: string,
+  query: string,
+  limit: number,
+): Promise<CrossLibHit[]> {
+  const needle = query.toLowerCase();
+  const hits: CrossLibHit[] = [];
+
+  const collect = async (lib: string, files: { abs: string; rel: string; date: string | null }[]): Promise<void> => {
+    for (const file of files) {
+      if (hits.length >= limit) return;
+      let raw: string;
+      try {
+        raw = await readFile(file.abs, "utf8");
+      } catch {
+        continue;
+      }
+      const lines = raw.split(/\r?\n/);
+      for (let index = 0; index < lines.length && hits.length < limit; index += 1) {
+        const text = lines[index] ?? "";
+        if (!text.toLowerCase().includes(needle)) continue;
+        hits.push({ lib, path: file.rel.split(path.sep).join("/"), date: file.date, line: index + 1, text: text.trim().slice(0, 180) });
+      }
+    }
+  };
+
+  for (const root of roots) {
+    if (hits.length >= limit) break;
+    let workspace: Workspace;
+    try {
+      workspace = await Workspace.load(root);
+    } catch {
+      continue;
+    }
+    const files: { abs: string; rel: string; date: string | null }[] = [
+      { abs: workspace.overviewPath, rel: workspace.config.overview, date: null },
+      { abs: workspace.goalsPath, rel: workspace.config.goals, date: null },
+    ];
+    try {
+      const entries = await readdir(root, { withFileTypes: true });
+      const dates = entries
+        .filter((entry) => entry.isDirectory() && DATE.test(entry.name))
+        .map((entry) => entry.name)
+        .sort()
+        .reverse()
+        .slice(0, SEARCH_FILES);
+      for (const date of dates) {
+        files.push({ abs: workspace.summaryPath(date), rel: `${date}/${workspace.config.summaryFile}`, date });
+      }
+    } catch {
+      // 库不可读时只搜总览
+    }
+    await collect(root, files);
+  }
+
+  if (hits.length < limit) {
+    let notes: string[] = [];
+    try {
+      notes = (await readdir(inboxDir, { withFileTypes: true }))
+        .filter((entry) => entry.isFile() && /\.md$/i.test(entry.name))
+        .map((entry) => entry.name)
+        .sort()
+        .reverse();
+    } catch {
+      notes = [];
+    }
+    await collect(
+      "收件箱",
+      notes.map((name) => ({ abs: path.join(inboxDir, name), rel: name, date: null })),
+    );
+  }
+
+  return hits;
+}
+
 const require = createRequire(import.meta.url);
 const VERSION = (require("../package.json") as { version?: string }).version ?? "0.0.0";
 
@@ -315,6 +433,12 @@ export interface MyBlogHandlers {
   today: () => Promise<TodayPlan>;
   summaries: () => Promise<SummaryDoc[]>;
   milestones: () => Promise<MilestoneStats>;
+  dayProgress: (payload: { date: string }) => Promise<{
+    date: string;
+    records: { lib: string; didWhat: string; link: string }[];
+    summaries: { lib: string; path: string }[];
+    inbox: { name: string }[];
+  }>;
   summary: (payload: { date: string }) => Promise<{ exists: boolean; summary: SummaryDoc | null }>;
   saveSummary: (payload: { date: string; content: string }) => Promise<{ ok: true; path: string }>;
   patchProgress: (payload: Partial<ProgressSnapshot>) => Promise<{ ok: true; changed: boolean }>;
@@ -356,7 +480,19 @@ export interface MyBlogHandlers {
   bindWorkspaceProfile: (payload: { profile?: string }) => Promise<{ bound: string }>;
   deleteProfile: (payload: { profile: string }) => Promise<{ ok: true }>;
   storage: () => Promise<StorageView>;
-  saveStorage: (payload: { agentConfigPath?: string; historyDir?: string }) => Promise<StorageView>;
+  saveStorage: (payload: { agentConfigPath?: string; historyDir?: string; inboxDir?: string }) => Promise<StorageView>;
+  inboxList: () => Promise<{
+    dir: string;
+    today: string;
+    files: { name: string; updatedAt: number; bytes: number }[];
+  }>;
+  inboxRead: (payload: { name?: string }) => Promise<{ name: string; content: string }>;
+  inboxWrite: (payload: { name?: string; content: string }) => Promise<{ ok: true; name: string }>;
+  inboxRename: (payload: { from: string; to: string }) => Promise<{ ok: true; name: string }>;
+  inboxDelete: (payload: { name: string }) => Promise<{ ok: true }>;
+  backups: () => Promise<{ items: { name: string; target: string; stamp: string; size: number }[] }>;
+  readBackup: (payload: { name: string }) => Promise<{ name: string; target: string; content: string }>;
+  restoreBackup: (payload: { name: string }) => Promise<{ ok: true; target: string }>;
   sessions: () => Promise<SessionList>;
   createSession: (payload?: { title?: string }) => Promise<SessionList & { session: SessionMeta }>;
   activateSession: (payload: { id: string }) => Promise<SessionList>;
@@ -399,6 +535,7 @@ export function createApi(options: ApiOptions): MyBlogApi {
 
   let storage: StorageSettings | null = null;
   let currentRoot = defaults.activeWorkspace;
+  let milestonesCache: { at: number; value: MilestoneStats } | null = null;
 
   const getStorage = async (): Promise<StorageSettings> => {
     if (!storage) {
@@ -410,6 +547,7 @@ export function createApi(options: ApiOptions): MyBlogApi {
   const persist = async (next: StorageSettings): Promise<void> => {
     await writeStorage(storageFile, next);
     storage = next;
+    milestonesCache = null;
     if (next.activeWorkspace !== currentRoot) {
       currentRoot = next.activeWorkspace;
       options.onRootChange?.(currentRoot);
@@ -421,7 +559,7 @@ export function createApi(options: ApiOptions): MyBlogApi {
     await getStorage();
     return Workspace.load(currentRoot);
   };
-  const setStorage = async (patch: { agentConfigPath?: string; historyDir?: string }): Promise<StorageSettings> => {
+  const setStorage = async (patch: { agentConfigPath?: string; historyDir?: string; inboxDir?: string }): Promise<StorageSettings> => {
     const current = await getStorage();
     const next: StorageSettings = {
       agentConfigPath:
@@ -432,6 +570,10 @@ export function createApi(options: ApiOptions): MyBlogApi {
         typeof patch.historyDir === "string" && patch.historyDir !== ""
           ? path.resolve(patch.historyDir)
           : current.historyDir,
+      inboxDir:
+        typeof patch.inboxDir === "string" && patch.inboxDir !== ""
+          ? path.resolve(patch.inboxDir)
+          : current.inboxDir,
       workspaces: current.workspaces,
       activeWorkspace: current.activeWorkspace,
       names: current.names,
@@ -636,6 +778,7 @@ export function createApi(options: ApiOptions): MyBlogApi {
     },
 
     milestones: async () => {
+      if (milestonesCache && Date.now() - milestonesCache.at < 10000) return milestonesCache.value;
       const storage = await getStorage();
       const roots = storage.workspaces.length > 0 ? storage.workspaces : [storage.activeWorkspace];
       const activity: Record<string, number> = {};
@@ -695,10 +838,73 @@ export function createApi(options: ApiOptions): MyBlogApi {
         libCount += 1;
       }
 
+      // 收件箱（全局，工作区之外）：文件名带日期的笔记，计入当天活动
+      try {
+        const entries = await readdir(storage.inboxDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile()) continue;
+          const match = /^(\d{4}-\d{2}-\d{2})/.exec(entry.name);
+          if (!match) continue;
+          const date = match[1] as string;
+          activity[date] = (activity[date] ?? 0) + 1;
+        }
+      } catch {
+        // 收件箱目录不存在或无权限：跳过
+      }
+
       let maxCapabilityDays = 0;
       for (const set of capDays.values()) if (set.size > maxCapabilityDays) maxCapabilityDays = set.size;
 
-      return { activity, summaryCount, closedCapabilities, goalCount, maxCapabilityDays, libCount };
+      const result: MilestoneStats = { activity, summaryCount, closedCapabilities, goalCount, maxCapabilityDays, libCount };
+      milestonesCache = { at: Date.now(), value: result };
+      return result;
+    },
+
+    dayProgress: async (payload) => {
+      const date = String(payload?.date ?? "");
+      if (!DATE.test(date)) throw new Error("日期格式应为 YYYY-MM-DD");
+      const storage = await getStorage();
+      const roots = storage.workspaces.length > 0 ? storage.workspaces : [storage.activeWorkspace];
+      const records: { lib: string; didWhat: string; link: string }[] = [];
+      const summaries: { lib: string; path: string }[] = [];
+      const label = (root: string): string => storage.names[root] ?? path.basename(root);
+
+      for (const root of roots) {
+        let workspace: Workspace;
+        try {
+          workspace = await Workspace.load(root);
+        } catch {
+          continue;
+        }
+        try {
+          const { status } = await workspace.readStatusSafe();
+          if (status) {
+            for (const record of status.records) {
+              if (record.date === date) records.push({ lib: label(root), didWhat: record.didWhat, link: record.link });
+            }
+          }
+        } catch {
+          // 忽略读不到总览的库
+        }
+        try {
+          const doc = await workspace.readSummary(date);
+          if (doc) summaries.push({ lib: label(root), path: `${date}/${workspace.config.summaryFile}` });
+        } catch {
+          // 该库没有这天的总结
+        }
+      }
+
+      const inbox: { name: string }[] = [];
+      try {
+        const entries = await readdir(storage.inboxDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile() && entry.name.startsWith(date) && /\.md$/i.test(entry.name)) inbox.push({ name: entry.name });
+        }
+      } catch {
+        // 收件箱目录不存在
+      }
+
+      return { date, records, summaries, inbox };
     },
 
     summary: async (payload) => {
@@ -1157,9 +1363,118 @@ export function createApi(options: ApiOptions): MyBlogApi {
     saveStorage: async (payload) => {
       const agentConfigPath = typeof payload?.agentConfigPath === "string" ? payload.agentConfigPath.trim() : "";
       const historyDir = typeof payload?.historyDir === "string" ? payload.historyDir.trim() : "";
+      const inboxDir = typeof payload?.inboxDir === "string" ? payload.inboxDir.trim() : "";
       if (agentConfigPath !== "") await assertWritableConfigFile(agentConfigPath);
       if (historyDir !== "") await assertWritableHistoryDir(historyDir);
+      if (inboxDir !== "") await assertWritableInboxDir(inboxDir);
       return { ...(await setStorage(payload ?? {})), defaults };
+    },
+
+    inboxList: async () => {
+      const storage = await getStorage();
+      let files: { name: string; updatedAt: number; bytes: number }[] = [];
+      try {
+        const entries = await readdir(storage.inboxDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile() || !/\.md$/i.test(entry.name)) continue;
+          try {
+            const info = await stat(path.join(storage.inboxDir, entry.name));
+            files.push({ name: entry.name, updatedAt: info.mtimeMs, bytes: info.size });
+          } catch {
+            // 忽略读不到的文件
+          }
+        }
+      } catch {
+        files = [];
+      }
+      files.sort((left, right) => right.updatedAt - left.updatedAt || left.name.localeCompare(right.name));
+      return { dir: storage.inboxDir, today: inboxDateName(), files };
+    },
+
+    inboxRead: async (payload) => {
+      const storage = await getStorage();
+      const name = inboxFileName(payload?.name, inboxDateName());
+      let content = "";
+      try {
+        content = await readFile(path.join(storage.inboxDir, name), "utf8");
+      } catch {
+        content = "";
+      }
+      return { name, content };
+    },
+
+    inboxWrite: async (payload) => {
+      if (typeof payload?.content !== "string") throw new Error("缺少 content");
+      const storage = await getStorage();
+      const name = inboxFileName(payload?.name, inboxDateName());
+      await mkdir(storage.inboxDir, { recursive: true });
+      await writeFile(path.join(storage.inboxDir, name), payload.content, "utf8");
+      return { ok: true as const, name };
+    },
+
+    inboxRename: async (payload) => {
+      const storage = await getStorage();
+      const from = inboxFileName(payload?.from, inboxDateName());
+      const to = inboxFileName(payload?.to, from);
+      if (to === from) return { ok: true as const, name: to };
+      const source = path.join(storage.inboxDir, from);
+      if (!(await stat(source).catch(() => null))) throw new Error(`笔记不存在：${from}`);
+      if (await stat(path.join(storage.inboxDir, to)).catch(() => null)) throw new Error(`目标已存在：${to}`);
+      await rename(source, path.join(storage.inboxDir, to));
+      return { ok: true as const, name: to };
+    },
+
+    inboxDelete: async (payload) => {
+      const storage = await getStorage();
+      const name = inboxFileName(payload?.name, inboxDateName());
+      await rm(path.join(storage.inboxDir, name), { force: true });
+      return { ok: true as const };
+    },
+
+    backups: async () => {
+      const workspace = await get();
+      const dir = path.join(workspace.root, ".myblog", "backups");
+      const items: { name: string; target: string; stamp: string; size: number }[] = [];
+      try {
+        const entries = await readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile() || !entry.name.endsWith(".bak")) continue;
+          const parsed = parseBackupName(entry.name);
+          if (!parsed) continue;
+          let size = 0;
+          try {
+            size = (await stat(path.join(dir, entry.name))).size;
+          } catch {
+            size = 0;
+          }
+          items.push({ name: entry.name, target: parsed.safe.split("__").join("/"), stamp: parsed.stamp, size });
+        }
+      } catch {
+        // 没有备份目录
+      }
+      items.sort((left, right) => right.stamp.localeCompare(left.stamp));
+      return { items };
+    },
+
+    readBackup: async (payload) => {
+      const workspace = await get();
+      const name = path.basename(String(payload?.name ?? ""));
+      const parsed = parseBackupName(name);
+      if (!parsed) throw new Error("备份文件名不合法");
+      const content = await readFile(path.join(workspace.root, ".myblog", "backups", name), "utf8");
+      return { name, target: parsed.safe.split("__").join("/"), content };
+    },
+
+    restoreBackup: async (payload) => {
+      const workspace = await get();
+      const name = path.basename(String(payload?.name ?? ""));
+      const parsed = parseBackupName(name);
+      if (!parsed) throw new Error("备份文件名不合法");
+      const target = resolveInside(workspace.root, parsed.safe.split("__").join("/"));
+      const content = await readFile(path.join(workspace.root, ".myblog", "backups", name), "utf8");
+      await workspace.backup(target);
+      await writeFile(target, content, "utf8");
+      return { ok: true as const, target: toRelative(workspace.root, target) };
     },
 
     sessions: async () => {
@@ -1248,18 +1563,47 @@ export function createApi(options: ApiOptions): MyBlogApi {
     const workspace = await get();
     const { config } = await resolveAgent();
     const loaded = await pluginsPromise;
-    const extraTools = loaded.tools.map((tool) => ({
-      spec: tool.spec,
-      run: (args: Record<string, unknown>) =>
-        Promise.resolve(tool.run(args, { root: currentRoot, pluginId: tool.pluginId })),
-    }));
+    const extraTools = [
+      ...loaded.tools.map((tool) => ({
+        spec: tool.spec,
+        run: (args: Record<string, unknown>) =>
+          Promise.resolve(tool.run(args, { root: currentRoot, pluginId: tool.pluginId })),
+      })),
+      {
+        spec: {
+          type: "function" as const,
+          function: {
+            name: "myblog_search_all",
+            description:
+              "只读：在所有学习库（含「收获收件箱」）里搜索关键词，用于跨库检索、把不同库的知识融会贯通。返回命中的库、文件、行号与上下文；无需用户切换工作区。",
+            parameters: {
+              type: "object",
+              properties: { query: { type: "string", description: "关键词（至少 2 个字）" } },
+              required: ["query"],
+              additionalProperties: false,
+            },
+          },
+        },
+        run: async (args: Record<string, unknown>) => {
+          const query = typeof args.query === "string" ? args.query.trim() : "";
+          if (query.length < 2) return { error: "关键词至少 2 个字" };
+          const storage = await getStorage();
+          const hits = await crossLibSearch(storage.workspaces, storage.inboxDir, query, 60);
+          return { query, count: hits.length, hits };
+        },
+      },
+    ];
     for await (const event of runAgent({ workspace, messages, config, signal, extraTools })) {
       if (signal.aborted) break;
       emit(event);
     }
   };
 
-  const watchChanges = (onChange: () => void): (() => void) => createWorkspaceWatcher(currentRoot, onChange);
+  const watchChanges = (onChange: () => void): (() => void) =>
+    createWorkspaceWatcher(currentRoot, () => {
+      milestonesCache = null;
+      onChange();
+    });
 
   return {
     version: VERSION,

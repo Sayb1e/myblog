@@ -4,6 +4,10 @@ interface Props {
   /** 日期(YYYY-MM-DD) -> 当天活动条数 */
   activity: Map<string, number>;
   weeks?: number;
+  /** true 时不渲染自己的卡片外壳，交给外层容器 */
+  bare?: boolean;
+  /** 点击某天时回调（列出当天进展） */
+  onSelectDate?: (date: string) => void;
 }
 
 function fmt(date: Date): string {
@@ -24,7 +28,7 @@ function isNextDay(prev: string, next: string): boolean {
 
 const WEEKDAY_LABELS = ["一", "", "三", "", "五", "", "日"];
 
-export function ActivityHeatmap({ activity, weeks = 12 }: Props) {
+export function ActivityHeatmap({ activity, weeks = 12, bare = false, onSelectDate }: Props) {
   const { days, current, longest, activeCount } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -59,8 +63,10 @@ export function ActivityHeatmap({ activity, weeks = 12 }: Props) {
 
   const level = (count: number): number => (count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : 3);
 
+  const Wrap = bare ? "div" : "section";
+
   return (
-    <section className="card heatmap-card">
+    <Wrap className={bare ? "chart-section" : "card heatmap-card"}>
       <div className="card-head">
         <h2>学习热力图</h2>
         <span className="muted">
@@ -78,15 +84,17 @@ export function ActivityHeatmap({ activity, weeks = 12 }: Props) {
             const count = activity.get(fmt(day)) ?? 0;
             const future = day.getTime() > Date.now();
             return (
-              <span
+              <button
                 key={fmt(day)}
+                type="button"
                 className={`heat-cell level-${level(count)}${future ? " future" : ""}`}
                 data-tip={`${fmt(day)} · ${count > 0 ? `${count} 项进展` : "没有记录"}`}
+                onClick={onSelectDate ? () => onSelectDate(fmt(day)) : undefined}
               />
             );
           })}
         </div>
       </div>
-    </section>
+    </Wrap>
   );
 }

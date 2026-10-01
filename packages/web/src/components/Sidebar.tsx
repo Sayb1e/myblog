@@ -8,6 +8,7 @@ import {
   IconDaily,
   IconFolder,
   IconFolderOpen,
+  IconInbox,
   IconOverview,
   IconSettings,
   IconSliders,
@@ -61,6 +62,7 @@ export function Sidebar({
   const items: Item[] = [
     { key: "overview", label: "概览", icon: <IconOverview /> },
     { key: "milestones", label: "里程碑", icon: <IconTrophy /> },
+    { key: "inbox", label: "收件箱", icon: <IconInbox /> },
     { key: "daily", label: "每日总结", icon: <IconDaily /> },
     { key: "files", label: "文件", icon: <IconFolderOpen /> },
   ];
@@ -86,7 +88,6 @@ export function Sidebar({
             type="button"
             className={`nav-item${view === item.key ? " active" : ""}`}
             onClick={() => onView(item.key)}
-            data-tip={prefs.sidebarCollapsed ? item.label : undefined}
           >
             <span className="nav-icon">{item.icon}</span>
             <span className="nav-label">{item.label}</span>
@@ -116,7 +117,6 @@ export function Sidebar({
             type="button"
             className={`nav-item${terminalOpen ? " active" : ""}`}
             onClick={onToggleTerminal}
-            data-tip={prefs.sidebarCollapsed ? "终端" : undefined}
           >
             <span className="nav-icon">
               <IconTerminal />
@@ -128,7 +128,6 @@ export function Sidebar({
           type="button"
           className={`nav-item${view === "settings" ? " active" : ""}`}
           onClick={() => onView("settings")}
-          data-tip={prefs.sidebarCollapsed ? "设置" : undefined}
         >
           <span className="nav-icon">
             <IconSettings />
@@ -139,7 +138,6 @@ export function Sidebar({
           type="button"
           className="nav-item collapse-toggle"
           onClick={() => setPref("sidebarCollapsed", !prefs.sidebarCollapsed)}
-          data-tip={prefs.sidebarCollapsed ? "展开侧栏" : undefined}
         >
           <span className="nav-icon" style={{ transform: prefs.sidebarCollapsed ? "rotate(180deg)" : undefined }}>
             <IconChevron />

@@ -13,7 +13,6 @@ interface Props {
   onRefresh: () => Promise<void>;
 }
 
-const SUMMARY_FILE = "SUMMARY.md";
 const DATE_PAGE = 120;
 
 export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
@@ -144,7 +143,6 @@ export function DailyView({ date, summaries, onSelectDate, onRefresh }: Props) {
     if (next) payload.next = next;
     if (did) {
       payload.didWhat = did;
-      payload.link = `./${date}/${SUMMARY_FILE}`;
       payload.linkText = "总结";
     }
     try {

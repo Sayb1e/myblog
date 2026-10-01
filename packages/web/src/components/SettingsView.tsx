@@ -16,6 +16,7 @@ function SystemIcon() {
 interface Props {
   root: string;
   version: string;
+  onOpenBackups?: () => void;
 }
 
 type CategoryId = "ui" | "features" | "plugins" | "storage" | "about";
@@ -54,13 +55,14 @@ function Toggle({ prefKey, label, hint }: { prefKey: BooleanPrefKey; label: stri
   );
 }
 
-export function SettingsView({ root, version }: Props) {
+export function SettingsView({ root, version, onOpenBackups }: Props) {
   const [category, setCategory] = useState<CategoryId>("ui");
   const { prefs, setPref } = usePrefs();
   const toast = useToast();
   const [storage, setStorage] = useState<StorageView | null>(null);
   const [agentPath, setAgentPath] = useState("");
   const [historyPath, setHistoryPath] = useState("");
+  const [inboxDir, setInboxDir] = useState("");
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
 
   useEffect(() => {
@@ -70,6 +72,7 @@ export function SettingsView({ root, version }: Props) {
         setStorage(next);
         setAgentPath(next.agentConfigPath);
         setHistoryPath(next.historyDir);
+        setInboxDir(next.inboxDir);
       } catch (caught) {
         toast("error", errorMessage(caught));
       }
@@ -91,10 +94,11 @@ export function SettingsView({ root, version }: Props) {
 
   const savePaths = async (): Promise<void> => {
     try {
-      const next = await saveStorage({ agentConfigPath: agentPath, historyDir: historyPath });
+      const next = await saveStorage({ agentConfigPath: agentPath, historyDir: historyPath, inboxDir });
       setStorage(next);
       setAgentPath(next.agentConfigPath);
       setHistoryPath(next.historyDir);
+      setInboxDir(next.inboxDir);
       toast("success", "存储位置已保存");
     } catch (caught) {
       toast("error", errorMessage(caught));
@@ -349,6 +353,33 @@ export function SettingsView({ root, version }: Props) {
                 )}
               </div>
             </div>
+            <div className="setting-field">
+              <strong>收获收件箱目录</strong>
+              <p className="muted">
+                全局快记「计划外学到的东西」的 <b>目录</b>：里面每个 <code className="code">.md</code> 是一份笔记（默认一天一个文件），
+                例如 <code className="code">D:\Work\inbox</code>。跨库共用，AI 也能跨库读到它。
+              </p>
+              <div className="path-input">
+                <input value={inboxDir} onChange={(event) => setInboxDir(event.target.value)} spellCheck={false} />
+                {canPick && (
+                  <button type="button" onClick={() => void pickInto(setInboxDir)}>
+                    浏览…
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="setting-field">
+              <strong>备份与恢复</strong>
+              <p className="muted">
+                覆盖写 PROGRESS / GOALS / SUMMARY 等之前会自动备份到工作区 <code className="code">.myblog/backups/</code>
+                （每文件留 20 份）；这里可以查看某一份备份并恢复回去。
+              </p>
+              <div className="row">
+                <button type="button" onClick={onOpenBackups} disabled={!onOpenBackups}>
+                  查看备份…
+                </button>
+              </div>
+            </div>
             <div className="row">
               <button type="button" className="primary" onClick={() => void savePaths()}>
                 保存
@@ -359,6 +390,7 @@ export function SettingsView({ root, version }: Props) {
                   onClick={() => {
                     setAgentPath(storage.defaults.agentConfigPath);
                     setHistoryPath(storage.defaults.historyDir);
+                    setInboxDir(storage.defaults.inboxDir);
                   }}
                 >
                   恢复默认值

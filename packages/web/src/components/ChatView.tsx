@@ -67,6 +67,19 @@ function formatTokens(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value);
 }
 
+/** 从最新往回保留消息，直到接近 token 预算；至少保留最后一条 */
+function trimHistory<T extends { content: string }>(history: T[], budgetTokens: number): T[] {
+  const kept: T[] = [];
+  let used = 0;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const tokens = estimateTokens(history[index]?.content ?? "") + 4;
+    if (kept.length > 0 && used + tokens > budgetTokens) break;
+    used += tokens;
+    kept.unshift(history[index] as T);
+  }
+  return kept;
+}
+
 interface MessageRowProps {
   message: Message;
   streaming: boolean;
@@ -252,10 +265,13 @@ export function ChatView() {
   const streamingRef = useRef(false);
   streamingRef.current = streaming;
   const [atBottom, setAtBottom] = useState(true);
+  const [lastError, setLastError] = useState("");
+  const [renderLimit, setRenderLimit] = useState(60);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const lastAssistantId = [...messages].reverse().find((message) => message.role === "assistant")?.id ?? -1;
+  const shownMessages = renderLimit >= messages.length ? messages : messages.slice(messages.length - renderLimit);
   const contextLimit = prefs.contextLimit > 0 ? prefs.contextLimit : 128000;
   const usedTokens = useMemo(() => {
     let total = SYSTEM_OVERHEAD_TOKENS;
@@ -520,6 +536,7 @@ export function ChatView() {
     const started = performance.now();
     const controller = new AbortController();
     abortRef.current = controller;
+    setLastError("");
 
     // 文本按帧合并：避免每个 token 都触发一次全量 setState
     let pendingText = "";
@@ -572,6 +589,7 @@ export function ChatView() {
                 return { ...message, tools };
               }
               if (event.type === "error") {
+                setLastError(event.message);
                 return { ...message, content: `${message.content}\n\n> 错误：${event.message}` };
               }
               return message;
@@ -581,7 +599,10 @@ export function ChatView() {
         controller.signal,
       );
     } catch (caught) {
-      if ((caught as Error).name !== "AbortError") toast("error", errorMessage(caught));
+      if ((caught as Error).name !== "AbortError") {
+        setLastError(errorMessage(caught));
+        toast("error", errorMessage(caught));
+      }
     } finally {
       flushText();
       const elapsed = performance.now() - started;
@@ -633,7 +654,9 @@ export function ChatView() {
     bumpEvent("chats");
     const userMessage: Message = { id: nextId++, role: "user", content: text, tools: [] };
     const assistantId = nextId++;
-    const history = [...messages, userMessage].map((message) => ({ role: message.role, content: message.content }));
+    const rawHistory = [...messages, userMessage].map((message) => ({ role: message.role, content: message.content }));
+    const history = trimHistory(rawHistory, Math.max(2000, Math.floor(contextLimit * 0.8)));
+    if (history.length < rawHistory.length) toast("info", "上下文较长，已自动裁剪较早的消息");
 
     setMessages((current) => [
       ...current,
@@ -651,12 +674,13 @@ export function ChatView() {
       const index = current.findIndex((message) => message.id === assistantId);
       if (index < 1) return;
       const base = current.slice(0, index);
-      const history = base.map((message) => ({ role: message.role, content: message.content }));
+      const rawHistory = base.map((message) => ({ role: message.role, content: message.content }));
+      const history = trimHistory(rawHistory, Math.max(2000, Math.floor(contextLimit * 0.8)));
       const newId = nextId++;
       setMessages([...base, { id: newId, role: "assistant", content: "", tools: [] }]);
       await runTurn(history, newId);
     },
-    [runTurn],
+    [runTurn, contextLimit],
   );
 
   const editUser = useCallback((message: Message): void => {
@@ -891,7 +915,13 @@ export function ChatView() {
           </div>
         )}
 
-        {messages.map((message) => (
+        {renderLimit < messages.length && (
+          <button type="button" className="ghost chat-more" onClick={() => setRenderLimit((value) => value + 60)}>
+            显示更早的 {Math.min(messages.length - renderLimit, 60)} 条
+          </button>
+        )}
+
+        {shownMessages.map((message) => (
           <MessageRow
             key={message.id}
             message={message}
@@ -908,6 +938,20 @@ export function ChatView() {
         <button type="button" className="scroll-bottom" onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}>
           <IconArrowDown /> 到底部
         </button>
+      )}
+
+      {lastError && (
+        <div className="chat-error">
+          <span className="chat-error-text">出错：{lastError}</span>
+          <button
+            type="button"
+            className="btn-sm"
+            disabled={streaming || lastAssistantId < 0}
+            onClick={() => void regenerate(lastAssistantId)}
+          >
+            重试
+          </button>
+        </div>
       )}
 
       <div

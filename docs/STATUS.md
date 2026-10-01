@@ -6,10 +6,19 @@
 
 | 项 | 状态 |
 | --- | --- |
-| package 版本 | **1.3.2**（成就游戏化重做 / 里程碑跨库聚合 / `fs_move` / 对话增强；本地 `win-unpacked` 已更新） |
+| package 版本 | **1.4.0**（周复盘 / 全局快记收件箱 / AI 跨库只读检索；未打 tag） |
 | 最近已发布 | **v1.3.2**（GitHub Release Latest：`MyBlog_v1.3.2_setup.exe` + `_portable.exe` + `SHA256SUMS.txt`；主分支与 tag 均已推送） |
-| 待发布 | 无（下次有用户可见改动时 bump 并 tag） |
-| 本地产物 | `packages/desktop/release/win-unpacked/MyBlog.exe`（1.3.2）；旧的 1.2.x 产物已删 |
+| 待发布 | **v1.4.0**（周复盘 + 收件箱 + 跨库读；发布流程：commit/push → 打 `v1.4.0` tag → CI 建 Release） |
+| 本地产物 | `packages/desktop/release/win-unpacked/MyBlog.exe`（1.4.0，已随最近改动重打包） |
+
+## 1.4.0 已完成（待发布）
+
+- **动态规划（对话内）**：`chat.ts` 系统提示规定——问「今天 / 接下来学什么、准备学什么、帮我安排一下」这类规划问题时，先自动回顾**计划内**（注入的能力/记录）+ **计划外**（收件箱），必要时用只读工具补齐，**回顾之后再给动态规划**并附依据。周复盘功能已按用户要求彻底移除（无 `review.ts` / `REVIEW-*.md` / 复盘日志）。
+- **收获收件箱（独立页面 · 目录 · 双模式）**：侧栏「收件箱」→ `InboxView`（左列表 + 右编辑，默认一天一个文件、可新建/切换、约 1.2s 自动保存 / `Ctrl+S`）；编辑分**源码模式**与**编辑模式**——编辑模式是 **Obsidian 式 live preview**（`MarkdownLiveEditor`：CodeMirror 6 + `@codemirror/lang-markdown`，自写 ViewPlugin 装饰：非当前行隐藏标记、当前行显示源码；文档保持原始 Markdown 不改写）。结构化文档仍源码 + 实时预览。server：`inboxList` / `inboxRead` / `inboxWrite`。路径 `StorageSettings.inboxDir`（默认 `~/.myblog/inbox`）。`InboxView` 懒加载。
+- **AI 跨库只读检索**：对话给 agent 追加只读工具 `myblog_search_all`（在 `streamChat` 里作为 `extraTools` 注入），跨所有注册学习库 + 收件箱搜关键词（`crossLibSearch` 复用各库 `PROGRESS/GOALS/SUMMARY`）。只读，不写任何库。
+- **收件箱计入里程碑**：`milestones` handler 额外读 `inboxDir` 里文件名带日期的笔记（`YYYY-MM-DD*.md`），按文件名日期计入「当天活动」（热力图/曲线/成就活动天数），**不计入每日总结数**。
+- **备份与恢复 / 对话健壮性 / 收件箱文件管理 / GFM**：设置→存储 或命令面板打开 `BackupsPanel`（列 `.myblog/backups/`、看内容、一键恢复，`backups`/`readBackup`/`restoreBackup` handler）；对话加「重试」+ 上下文自动裁剪 + 长会话分页渲染；收件箱 `inboxRename`/`inboxDelete` + 文件名过滤；live preview 补齐 GFM（任务/表格/图片/分隔线）。里程碑聚合加 10s 缓存（`milestonesCache`，切库/文件变化失效）。
+- **热力图点击明细**：`dayProgress` handler 返回某天跨库的 `records`/`summaries`/`inbox`；`ActivityHeatmap` 格子改为可点，App 弹 `DayProgress` 列出（悬停提示保留）。
 
 ## 1.3.2 已完成（已发布）
 
@@ -19,7 +28,7 @@
 - **里程碑跨库聚合**：新增 server `milestones` handler（`handlers.ts`）汇总所有注册学习库的记录/总结/能力；`useWorkspace` 拉取，App 的 `activity` 与成就输入（`closedCapabilities`/`goalCount`）改用它，热力图/曲线/成就跨库。`MilestonesView` 在 >1 库时提示。
 - **修整体界面横向平移**：超长不可断文本自动换行（`.md`/`.bubble`/`.user-text` `overflow-wrap:anywhere`），宽表格用 `Markdown.tsx` 的 `table` 包一层 `.md-table-wrap`（内部横滚），`.content` 与 `body` 设 `overflow-x:hidden`。
 
-## 1.3.1 已完成（已发布）
+## 1.3.1（已发布）
 
 - **终端 = 底部 dock**：侧栏「设置」上方按钮升起/收起，位于内容区内不遮挡侧栏/顶栏，可拖拽调整高度（记忆在偏好），收起不中断会话。
 - **里程碑页**：学习热力图（连续/最长天数）+ 学习曲线（累计学习天数）+ 成就。

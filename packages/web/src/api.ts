@@ -79,6 +79,15 @@ export const getSummaries = (): Promise<SummaryDoc[]> => call("summaries");
 
 export const getMilestoneStats = (): Promise<MilestoneStats> => call("milestones");
 
+export const getDayProgress = (
+  date: string,
+): Promise<{
+  date: string;
+  records: { lib: string; didWhat: string; link: string }[];
+  summaries: { lib: string; path: string }[];
+  inbox: { name: string }[];
+}> => call("dayProgress", { date });
+
 export const getSummary = (date: string): Promise<{ exists: boolean; summary: SummaryDoc | null }> =>
   call("summary", { date });
 
@@ -137,7 +146,34 @@ export const getStorage = (): Promise<StorageView> => call("storage");
 export const saveStorage = (patch: {
   agentConfigPath?: string;
   historyDir?: string;
+  inboxDir?: string;
 }): Promise<StorageView> => call("saveStorage", patch);
+
+export const getInboxList = (): Promise<{
+  dir: string;
+  today: string;
+  files: { name: string; updatedAt: number; bytes: number }[];
+}> => call("inboxList");
+
+export const readInboxFile = (name: string): Promise<{ name: string; content: string }> =>
+  call("inboxRead", { name });
+
+export const writeInboxFile = (name: string, content: string): Promise<{ ok: true; name: string }> =>
+  call("inboxWrite", { name, content });
+
+export const renameInboxFile = (from: string, to: string): Promise<{ ok: true; name: string }> =>
+  call("inboxRename", { from, to });
+
+export const deleteInboxFile = (name: string): Promise<{ ok: true }> => call("inboxDelete", { name });
+
+export const getBackups = (): Promise<{
+  items: { name: string; target: string; stamp: string; size: number }[];
+}> => call("backups");
+
+export const readBackup = (name: string): Promise<{ name: string; target: string; content: string }> =>
+  call("readBackup", { name });
+
+export const restoreBackup = (name: string): Promise<{ ok: true; target: string }> => call("restoreBackup", { name });
 
 export const getWorkspaces = (): Promise<WorkspaceList> => call("workspaces");
 

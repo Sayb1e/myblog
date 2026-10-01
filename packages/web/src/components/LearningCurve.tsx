@@ -4,6 +4,8 @@ interface Props {
   /** 日期(YYYY-MM-DD) -> 当天活动条数 */
   activity: Map<string, number>;
   weeks?: number;
+  /** true 时不渲染自己的卡片外壳，交给外层容器 */
+  bare?: boolean;
 }
 
 function fmt(date: Date): string {
@@ -16,7 +18,7 @@ function addDays(date: Date, days: number): Date {
   return next;
 }
 
-export function LearningCurve({ activity, weeks = 16 }: Props) {
+export function LearningCurve({ activity, weeks = 16, bare = false }: Props) {
   const { points, area, total, startLabel, endLabel, peak } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -53,8 +55,10 @@ export function LearningCurve({ activity, weeks = 16 }: Props) {
     };
   }, [activity, weeks]);
 
+  const Wrap = bare ? "div" : "section";
+
   return (
-    <section className="card curve-card">
+    <Wrap className={bare ? "chart-section" : "card curve-card"}>
       <div className="card-head">
         <h2>学习曲线</h2>
         <span className="muted">累计 {total} 天 · 近 {weeks} 周 · 单周最多 {peak} 天</span>
@@ -70,6 +74,6 @@ export function LearningCurve({ activity, weeks = 16 }: Props) {
         <span>{endLabel}</span>
       </div>
       <p className="muted curve-caption">口径：按有学习记录/总结的天数累计（投入曲线，不是掌握度）。</p>
-    </section>
+    </Wrap>
   );
 }

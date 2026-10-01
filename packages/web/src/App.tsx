@@ -37,6 +37,8 @@ import { MilestonesView } from "./components/MilestonesView.js";
 import { Onboarding } from "./components/Onboarding.js";
 import { ProgressCard } from "./components/ProgressCard.js";
 import { SettingsView } from "./components/SettingsView.js";
+import { BackupsPanel } from "./components/BackupsPanel.js";
+import { DayProgress } from "./components/DayProgress.js";
 import { type SelectOption } from "./components/Select.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { SkeletonCard } from "./components/Skeleton.js";
@@ -57,9 +59,14 @@ const TerminalView = lazy(() =>
   import("./components/TerminalView.js").then((module) => ({ default: module.TerminalView })),
 );
 
+const InboxView = lazy(() =>
+  import("./components/InboxView.js").then((module) => ({ default: module.InboxView })),
+);
+
 const TITLES: Record<View, string> = {
   overview: "概览",
   milestones: "里程碑",
+  inbox: "收件箱",
   daily: "每日总结",
   files: "文件",
   chat: "对话",
@@ -85,6 +92,8 @@ export function App() {
   const [visited, setVisited] = useState<Partial<Record<View, boolean>>>({ overview: true });
   const [modelReady, setModelReady] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
+  const [backupsOpen, setBackupsOpen] = useState(false);
+  const [dayDetail, setDayDetail] = useState("");
   const [pluginCommands, setPluginCommands] = useState<{ id: string; title: string; hint: string }[]>([]);
   const [pluginCount, setPluginCount] = useState(0);
   const [events, setEvents] = useState<Events>(() => readEvents());
@@ -272,6 +281,11 @@ export function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "i") {
+        event.preventDefault();
+        setView("inbox");
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setPaletteOpen((open) => !open);
@@ -463,6 +477,8 @@ export function App() {
     });
     list.push({ id: "action:write-today", label: "写今天的总结", hint: "scaffold", run: () => void writeToday() });
     list.push({ id: "action:goals", label: "生成 / 更新学习目标", hint: "GOALS.md", run: () => setGoalsOpen(true) });
+    list.push({ id: "action:capture", label: "打开收获收件箱", hint: "计划外 · Ctrl+Shift+I", run: () => setView("inbox") });
+    list.push({ id: "action:backups", label: "备份与恢复", hint: "backups", run: () => setBackupsOpen(true) });
     for (const entry of workspaces?.list ?? []) {
       if (entry === status?.root) continue;
       list.push({
@@ -657,7 +673,17 @@ export function App() {
 
         {visited.milestones && (
           <div className={viewClass("milestones")}>
-            {status && <MilestonesView activity={activity} achievements={achievements} libCount={milestones?.libCount} />}
+            {status && <MilestonesView activity={activity} achievements={achievements} libCount={milestones?.libCount} onSelectDate={setDayDetail} />}
+          </div>
+        )}
+
+        {visited.inbox && (
+          <div className={viewClass("inbox")}>
+            <MarkdownProvider openDate={openDate}>
+              <Suspense fallback={<p className="muted">加载收件箱…</p>}>
+                <InboxView />
+              </Suspense>
+            </MarkdownProvider>
           </div>
         )}
 
@@ -689,7 +715,7 @@ export function App() {
 
         {visited.settings && (
           <div className={viewClass("settings")}>
-            <SettingsView root={status?.root ?? ""} version={status?.version ?? ""} />
+            <SettingsView root={status?.root ?? ""} version={status?.version ?? ""} onOpenBackups={() => setBackupsOpen(true)} />
           </div>
         )}
         </div>
@@ -859,6 +885,21 @@ export function App() {
         onSearch={runSearch}
         onOpenHit={openHit}
       />
+
+      <BackupsPanel
+        open={backupsOpen}
+        onClose={() => setBackupsOpen(false)}
+        onRestored={() => void refresh()}
+      />
+
+      <DayProgress
+        date={dayDetail}
+        count={activity.get(dayDetail) ?? 0}
+        onClose={() => setDayDetail("")}
+        onOpenDaily={openDate}
+        onOpenInbox={() => setView("inbox")}
+      />
+
       <TooltipLayer />
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>

@@ -526,7 +526,8 @@ describe("milestones", () => {
   it("合并所有学习库的进展", async () => {
     const a = await mkdtemp(path.join(tmpdir(), "myblog-lib-a-"));
     const b = await mkdtemp(path.join(tmpdir(), "myblog-lib-b-"));
-    roots.push(a, b);
+    const emptyInbox = await mkdtemp(path.join(tmpdir(), "myblog-inbox-empty-"));
+    roots.push(a, b, emptyInbox);
     await writeSummary(a, "2026-09-20", "G1");
     await writeSummary(a, "2026-09-21", "G1");
     await writeSummary(b, "2026-09-21", "G2");
@@ -536,6 +537,7 @@ describe("milestones", () => {
       workspaces: [a, b],
       agentConfigPath: path.join(a, "config", "agent.json"),
     });
+    await api.dispatch("saveStorage", { inboxDir: emptyInbox });
     const stats = (await api.dispatch("milestones")) as {
       activity: Record<string, number>;
       summaryCount: number;
@@ -548,5 +550,90 @@ describe("milestones", () => {
     expect(Object.keys(stats.activity).sort()).toEqual(["2026-09-20", "2026-09-21"]);
     expect(stats.activity["2026-09-21"]).toBe(2);
     expect(stats.maxCapabilityDays).toBe(2);
+  });
+
+  it("收件箱里带日期的笔记计入当天活动，但不计入总结数", async () => {
+    const a = await mkdtemp(path.join(tmpdir(), "myblog-lib-"));
+    const inbox = await mkdtemp(path.join(tmpdir(), "myblog-inbox-"));
+    roots.push(a, inbox);
+    await writeSummary(a, "2026-09-20", "G1");
+    await writeFile(path.join(inbox, "2026-09-22.md"), "# 收件箱\n", "utf8");
+    await writeFile(path.join(inbox, "2026-09-22-2030.md"), "随手记", "utf8");
+    await writeFile(path.join(inbox, "ideas.md"), "无日期", "utf8");
+
+    const api = createApi({ root: a, agentConfigPath: path.join(a, "config", "agent.json") });
+    await api.dispatch("saveStorage", { inboxDir: inbox });
+    const stats = (await api.dispatch("milestones")) as {
+      activity: Record<string, number>;
+      summaryCount: number;
+    };
+
+    expect(stats.activity["2026-09-20"]).toBe(1);
+    expect(stats.activity["2026-09-22"]).toBe(2);
+    expect(stats.summaryCount).toBe(1);
+  });
+});
+
+describe("inbox", () => {
+  it("inboxWrite 写入、inboxList 列出、inboxRead 读回", async () => {
+    const { root, api } = await makeApi();
+    const dir = path.join(root, "inbox");
+    await api.dispatch("saveStorage", { inboxDir: dir });
+
+    await api.dispatch("inboxWrite", { name: "2026-09-29.md", content: "# 收件箱\n\n自由笔记\n" });
+    const list = (await api.dispatch("inboxList")) as {
+      dir: string;
+      today: string;
+      files: { name: string }[];
+    };
+    expect(list.dir).toBe(dir);
+    expect(list.today).toMatch(/^\d{4}-\d{2}-\d{2}\.md$/);
+    expect(list.files.map((file) => file.name)).toContain("2026-09-29.md");
+
+    const read = (await api.dispatch("inboxRead", { name: "2026-09-29.md" })) as { name: string; content: string };
+    expect(read.content).toContain("自由笔记");
+    expect(await readFile(path.join(dir, "2026-09-29.md"), "utf8")).toBe("# 收件箱\n\n自由笔记\n");
+  });
+
+  it("非法文件名报错、收件箱不能填文件", async () => {
+    const { root, api } = await makeApi();
+    await expect(api.dispatch("inboxWrite", { name: "notes.txt", content: "x" })).rejects.toThrow(/文件名/);
+    const file = path.join(root, "a.md");
+    await writeFile(file, "x", "utf8");
+    await expect(api.dispatch("saveStorage", { inboxDir: file })).rejects.toThrow("不能是文件");
+  });
+
+  it("inboxRename 改名、inboxDelete 删除", async () => {
+    const { root, api } = await makeApi();
+    await api.dispatch("saveStorage", { inboxDir: path.join(root, "inbox") });
+    await api.dispatch("inboxWrite", { name: "a.md", content: "x" });
+    await api.dispatch("inboxRename", { from: "a.md", to: "b.md" });
+    const listed = (await api.dispatch("inboxList")) as { files: { name: string }[] };
+    expect(listed.files.map((file) => file.name)).toEqual(["b.md"]);
+    await api.dispatch("inboxDelete", { name: "b.md" });
+    const after = (await api.dispatch("inboxList")) as { files: { name: string }[] };
+    expect(after.files.length).toBe(0);
+  });
+});
+
+describe("backups", () => {
+  it("列出、读取并恢复备份", async () => {
+    const { root, api } = await makeApi();
+    const dir = path.join(root, ".myblog", "backups");
+    await mkdir(dir, { recursive: true });
+    const name = "PROGRESS.md.2026-09-30T10-00-00-000Z.bak";
+    await writeFile(path.join(dir, name), "# old\n", "utf8");
+    await writeFile(path.join(root, "PROGRESS.md"), "# new\n", "utf8");
+
+    const list = (await api.dispatch("backups")) as { items: { name: string; target: string }[] };
+    expect(list.items[0]?.name).toBe(name);
+    expect(list.items[0]?.target).toBe("PROGRESS.md");
+
+    const read = (await api.dispatch("readBackup", { name })) as { content: string; target: string };
+    expect(read.target).toBe("PROGRESS.md");
+    expect(read.content).toBe("# old\n");
+
+    await api.dispatch("restoreBackup", { name });
+    expect(await readFile(path.join(root, "PROGRESS.md"), "utf8")).toBe("# old\n");
   });
 });

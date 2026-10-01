@@ -15,6 +15,8 @@ export interface AgentProfile {
 export interface StorageSettings {
   agentConfigPath: string;
   historyDir: string;
+  /** 全局「收获收件箱」目录（每个 md 文件是一份笔记；默认一天一个） */
+  inboxDir: string;
   workspaces: string[];
   activeWorkspace: string;
   /** 工作区别名（路径 -> 显示名） */
@@ -25,10 +27,15 @@ export interface StorageSettings {
   workspaceProfiles: Record<string, string>;
 }
 
+export function defaultInboxDir(): string {
+  return path.join(path.dirname(defaultAgentConfigPath()), "inbox");
+}
+
 export function defaultStorageSettings(root: string): StorageSettings {
   return {
     agentConfigPath: defaultAgentConfigPath(),
     historyDir: defaultHistoryDir(),
+    inboxDir: defaultInboxDir(),
     workspaces: [root],
     activeWorkspace: root,
     names: {},
@@ -96,6 +103,7 @@ export async function readStorage(file: string, defaults: StorageSettings): Prom
   return {
     agentConfigPath: asString(raw.agentConfigPath, defaults.agentConfigPath),
     historyDir: asString(raw.historyDir, defaults.historyDir),
+    inboxDir: asString(raw.inboxDir, defaults.inboxDir),
     workspaces: list.includes(active) ? list : [...list, active],
     activeWorkspace: active,
     names: asNames(raw.names),

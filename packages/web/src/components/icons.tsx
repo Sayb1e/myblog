@@ -10,7 +10,7 @@ function Base({ children, ...props }: IconProps & { children: ReactNode }) {
       height="16"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -24,10 +24,19 @@ function Base({ children, ...props }: IconProps & { children: ReactNode }) {
 export function IconOverview(props: IconProps) {
   return (
     <Base {...props}>
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      <rect x="3.5" y="3.5" width="7" height="7" rx="2.5" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="2.5" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="2.5" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="2.5" />
+    </Base>
+  );
+}
+
+export function IconInbox(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M3.6 13.5 6.2 6.3A2 2 0 0 1 8.1 5h7.8a2 2 0 0 1 1.9 1.3l2.6 7.2" />
+      <path d="M3.6 13.5h4.7l1.3 2.2h4.8l1.3-2.2h4.7V18a1.6 1.6 0 0 1-1.6 1.6H5.2A1.6 1.6 0 0 1 3.6 18z" />
     </Base>
   );
 }
@@ -35,9 +44,9 @@ export function IconOverview(props: IconProps) {
 export function IconDaily(props: IconProps) {
   return (
     <Base {...props}>
-      <path d="M6 3h9l4 4v14H6z" />
-      <path d="M15 3v4h4" />
-      <path d="M9 12h7M9 16h7" />
+      <path d="M6.5 3.5h6.9L18 8.1V20a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5z" />
+      <path d="M13.2 3.6V8H17.8" />
+      <path d="M9 12.5h6M9 16h6" />
     </Base>
   );
 }
@@ -45,7 +54,7 @@ export function IconDaily(props: IconProps) {
 export function IconChat(props: IconProps) {
   return (
     <Base {...props}>
-      <path d="M4 5h16v11H8l-4 4z" />
+      <path d="M4.5 6.5A1.5 1.5 0 0 1 6 5h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 18 17H9l-4.5 3.4z" />
     </Base>
   );
 }
@@ -313,9 +322,10 @@ export function IconGit(props: IconProps) {
 export function IconTrophy(props: IconProps) {
   return (
     <Base {...props}>
-      <path d="M8 4h8v4a4 4 0 0 1-8 0z" />
-      <path d="M8 5H5v1a3 3 0 0 0 3 3M16 5h3v1a3 3 0 0 1-3 3" />
-      <path d="M12 12v4M9 20h6M10 20v-2h4v2" />
+      <path d="M7 4h10v4.6a5 5 0 0 1-10 0z" />
+      <path d="M7 5.5H4.5V7a3.5 3.5 0 0 0 3.2 3.49" />
+      <path d="M17 5.5h2.5V7a3.5 3.5 0 0 1-3.2 3.49" />
+      <path d="M12 13.6V17M8.5 20h7M10 20v-3h4v3" />
     </Base>
   );
 }

@@ -285,7 +285,7 @@ export class Workspace {
 
     let recordAdded = false;
     if (input.didWhat !== undefined) {
-      const link = input.link ?? "";
+      const link = input.link ?? defaultLink;
       const duplicate = before.records.some(
         (record) => record.date === input.date && (record.didWhat === input.didWhat || (link !== "" && record.link === link)),
       );
